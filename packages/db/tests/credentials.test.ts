@@ -6,6 +6,7 @@ import {
   createCredentialType,
   createMember,
   createRole,
+  createOrgUnit,
   createTenant,
   expectTenantIsolation,
   grantRole,
@@ -14,22 +15,43 @@ import {
 
 afterAll(closeTestDb);
 
-async function actor(tx: Tx, t: string, perms: string[]) {
+async function actor(
+  tx: Tx,
+  t: string,
+  perms: string[],
+  scope: { scopeKind?: 'self' | 'org_unit' | 'department'; orgUnitId?: string | null } = {},
+) {
   const u = await userInTenant(tx, t);
   const m = await createMember(tx, t, { userId: u });
-  if (perms.length) await grantRole(tx, t, m, await createRole(tx, t, `c_${m.slice(0, 6)}`, perms));
+  if (perms.length) await grantRole(tx, t, m, await createRole(tx, t, `c_${m.slice(0, 6)}`, perms), scope);
   return { u, m };
 }
 
 describe('credential_types', () => {
-  it('isolates tenants', async () => {
+  it('isolates tenants (even for a config manager)', async () => {
     await withAdmin(async (tx) => {
-      await expectTenantIsolation(
-        tx,
-        'credential_types',
-        async (t) => { await createCredentialType(tx, t, 'emt'); },
-        (t) => tx`insert into credential_types (tenant_id, key, label, validity) values (${t}, 'x', 'x', '{}'::jsonb)`,
-      );
+      const a = await createTenant(tx, 'Iso A');
+      const b = await createTenant(tx, 'Iso B');
+      await createCredentialType(tx, a, 'emt');
+      await createCredentialType(tx, b, 'emt');
+      const v = await actor(tx, a, ['scheduling.config.manage']);
+      await asUser(tx, { sub: v.u, tenant_id: a }, async () => {
+        const rows = await tx`select distinct tenant_id from credential_types`;
+        expect(rows.map((r) => r.tenant_id)).toEqual([a]);
+        await expectDbError(tx, /row-level security/, () =>
+          tx`insert into credential_types (tenant_id, key, label, validity) values (${b}, 'x', 'x', '{}'::jsonb)`);
+      });
+    });
+  });
+
+  it('cannot be hard-deleted', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      await createCredentialType(tx, t, 'emt');
+      const v = await actor(tx, t, ['scheduling.config.manage']);
+      await asUser(tx, { sub: v.u, tenant_id: t }, async () => {
+        await expectDbError(tx, /permission denied/, () => tx`delete from credential_types`);
+      });
     });
   });
 
@@ -102,6 +124,50 @@ describe('member_credentials', () => {
       });
       await asUser(tx, { sub: mgr.u, tenant_id: t }, async () => {
         await ins(mgr.m);
+      });
+    });
+  });
+  it('denies self-scoped credentials.manage (insert and update)', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const ty = await createCredentialType(tx, t, 'emt');
+      const me = await actor(tx, t, ['credentials.manage', 'credentials.view'], { scopeKind: 'self' });
+      const id = await addCredential(tx, t, me.m, ty, '2026-12-01');
+      await asUser(tx, { sub: me.u, tenant_id: t }, async () => {
+        await expectDbError(tx, /row-level security/, () =>
+          tx`insert into member_credentials (tenant_id, member_id, type_id, issued_on) values (${t}, ${me.m}, ${ty}, '2025-01-01')`);
+        const upd = await tx`update member_credentials set expires_on = '2099-01-01' where id = ${id} returning id`;
+        expect(upd).toHaveLength(0);
+      });
+      const [row] = await tx`select expires_on::text from member_credentials where id = ${id}`;
+      expect(row!.expires_on).toBe('2026-12-01');
+    });
+  });
+
+  it('station-scoped credentials.view holder sees only own rows', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const ty = await createCredentialType(tx, t, 'emt');
+      const unit = await createOrgUnit(tx, t);
+      const me = await actor(tx, t, ['credentials.view'], { scopeKind: 'org_unit', orgUnitId: unit });
+      const other = await createMember(tx, t);
+      await addCredential(tx, t, me.m, ty, '2027-01-01');
+      await addCredential(tx, t, other, ty, '2027-01-01');
+      await asUser(tx, { sub: me.u, tenant_id: t }, async () => {
+        const rows = await tx`select member_id from member_credentials`;
+        expect(rows.map((r) => r.member_id)).toEqual([me.m]);
+      });
+    });
+  });
+
+  it('cannot be hard-deleted even by a department admin', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const ty = await createCredentialType(tx, t, 'emt');
+      const adm = await actor(tx, t, ['credentials.manage', 'credentials.view']);
+      await addCredential(tx, t, adm.m, ty, '2027-01-01');
+      await asUser(tx, { sub: adm.u, tenant_id: t }, async () => {
+        await expectDbError(tx, /permission denied/, () => tx`delete from member_credentials`);
       });
     });
   });

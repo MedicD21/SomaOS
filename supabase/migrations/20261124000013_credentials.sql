@@ -36,16 +36,24 @@ alter table public.member_credentials enable row level security;
 
 create policy tenant_read on public.credential_types for select to authenticated
   using (tenant_id = app.tenant_id());
-create policy tenant_write on public.credential_types for all to authenticated
+create policy tenant_insert on public.credential_types for insert to authenticated
+  with check (tenant_id = app.tenant_id() and app.has_permission_dept('scheduling.config.manage'));
+create policy tenant_update on public.credential_types for update to authenticated
   using (tenant_id = app.tenant_id() and app.has_permission_dept('scheduling.config.manage'))
   with check (tenant_id = app.tenant_id() and app.has_permission_dept('scheduling.config.manage'));
 
+-- Department-wide grants only (F3): a self/station-scoped holder cannot edit credentials.
 create policy member_read on public.member_credentials for select to authenticated
   using (tenant_id = app.tenant_id()
-         and (member_id = app.my_member_id() or app.has_permission('credentials.view')));
-create policy tenant_write on public.member_credentials for all to authenticated
-  using (tenant_id = app.tenant_id() and app.has_permission('credentials.manage'))
-  with check (tenant_id = app.tenant_id() and app.has_permission('credentials.manage'));
+         and (member_id = app.my_member_id() or app.has_permission_dept('credentials.view')));
+create policy tenant_insert on public.member_credentials for insert to authenticated
+  with check (tenant_id = app.tenant_id() and app.has_permission_dept('credentials.manage'));
+create policy tenant_update on public.member_credentials for update to authenticated
+  using (tenant_id = app.tenant_id() and app.has_permission_dept('credentials.manage'))
+  with check (tenant_id = app.tenant_id() and app.has_permission_dept('credentials.manage'));
+
+-- No hard deletes: archive types, revoke credentials.
+revoke delete on public.credential_types, public.member_credentials from authenticated;
 
 create trigger audit after insert or update or delete on public.credential_types
   for each row execute function app.audit_trigger();
