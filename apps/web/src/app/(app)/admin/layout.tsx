@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getRequestContext, hasAny, t } from '@/server/context';
 import { ADMIN_NAV } from '@/server/nav';
 
-const TERM_FOR: Record<string, [string, string]> = { '/admin/shifts': ['shifts', 'Shifts'] };
+const TERM_FOR: Record<string, [string, string]> = { '/admin/shifts': ['shifts', 'Shifts'], '/admin/members': ['members', 'Members'] };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getRequestContext();

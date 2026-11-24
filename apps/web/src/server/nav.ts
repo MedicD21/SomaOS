@@ -22,6 +22,11 @@ export const ADMIN_NAV: (NavItem & { anyOf: Permission[] })[] = [
   { href: '/admin/org', label: 'Org structure', module: 'admin', anyOf: ['admin.org.manage'] },
   { href: '/admin/ranks', label: 'Ranks', module: 'admin', anyOf: ['admin.org.manage'] },
   { href: '/admin/shifts', label: 'Shifts', module: 'admin', anyOf: ['admin.org.manage'] },
+  { href: '/admin/members', label: 'Members', module: 'admin', anyOf: ['admin.members.view'] },
+  { href: '/admin/custom-fields', label: 'Custom fields', module: 'admin', anyOf: ['admin.custom_fields.manage'] },
+  { href: '/admin/roles', label: 'Roles', module: 'admin', anyOf: ['admin.roles.manage'] },
+  { href: '/admin/grants', label: 'Grants', module: 'admin', anyOf: ['admin.roles.manage'] },
+  { href: '/admin/audit', label: 'Audit log', module: 'admin', anyOf: ['admin.audit.view'] },
 ];
 
 export function visibleNav(ctx: RequestContext, items: NavItem[] = NAV): NavItem[] {

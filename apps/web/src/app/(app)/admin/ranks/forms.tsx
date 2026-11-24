@@ -6,7 +6,7 @@ import { saveRank, saveShift } from './actions';
 export function RankForm({ rank }: { rank?: { id: string; key: string; label: string; sort: number } }) {
   const p = rank ? `rank-${rank.id}` : 'rank-new';
   return (
-    <ActionForm action={saveRank.bind(null, rank?.id ?? null)} label={rank ? `Edit ${rank.label}` : 'Add rank'} submitLabel={rank ? 'Save' : 'Add rank'}>
+    <ActionForm action={saveRank.bind(null, rank?.id ?? null)} label={rank ? `Edit ${rank.label}` : 'Add rank'} submitLabel={rank ? 'Save' : 'Add rank'} resetOnSuccess={!rank}>
       {(e) => (
         <div className="grid gap-3 sm:grid-cols-3">
           <Field id={`${p}-label`} label="Label" error={e.label}><Input id={`${p}-label`} name="label" defaultValue={rank?.label} required /></Field>
@@ -21,7 +21,7 @@ export function RankForm({ rank }: { rank?: { id: string; key: string; label: st
 export function ShiftForm({ shift, singular }: { shift?: { id: string; key: string; label: string; color: string | null }; singular: string }) {
   const p = shift ? `shift-${shift.id}` : 'shift-new';
   return (
-    <ActionForm action={saveShift.bind(null, shift?.id ?? null)} label={shift ? `Edit ${shift.label}` : `Add ${singular.toLowerCase()}`} submitLabel={shift ? 'Save' : `Add ${singular.toLowerCase()}`}>
+    <ActionForm action={saveShift.bind(null, shift?.id ?? null)} label={shift ? `Edit ${shift.label}` : `Add ${singular.toLowerCase()}`} submitLabel={shift ? 'Save' : `Add ${singular.toLowerCase()}`} resetOnSuccess={!shift}>
       {(e) => (
         <div className="grid gap-3 sm:grid-cols-3">
           <Field id={`${p}-label`} label="Label" error={e.label}><Input id={`${p}-label`} name="label" defaultValue={shift?.label} required /></Field>

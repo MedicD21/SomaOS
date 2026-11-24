@@ -34,7 +34,7 @@ function UnitFields({ prefix, errors, types, parents, name = '', typeId = '', pa
 
 export function AddUnitForm({ types, parents }: { types: Option[]; parents: Option[] }) {
   return (
-    <ActionForm action={createOrgUnit} label="Add org unit" submitLabel="Add unit">
+    <ActionForm action={createOrgUnit} label="Add org unit" submitLabel="Add unit" resetOnSuccess>
       {(errors) => <UnitFields prefix="new" errors={errors} types={types} parents={parents} />}
     </ActionForm>
   );

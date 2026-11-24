@@ -1,0 +1,79 @@
+'use server';
+import { redirect } from 'next/navigation';
+import { assignmentSchema, memberSchema } from '@soma/validators';
+import type { ActionResult } from '@/server/actions';
+import { runAdmin, zodFieldErrors } from '@/server/actions';
+import { getRequestContext, hasAny, withCtxDb } from '@/server/context';
+import { customFromForm, loadFieldDefs, validateCustom } from '@/server/custom-fields';
+
+function readMember(form: FormData) {
+  return memberSchema.safeParse({
+    firstName: form.get('firstName'), lastName: form.get('lastName'), preferredName: form.get('preferredName'),
+    employeeNumber: form.get('employeeNumber'), email: form.get('email'), phone: form.get('phone'),
+    rankId: form.get('rankId'), employmentType: form.get('employmentType'),
+    hireDate: form.get('hireDate'), seniorityDate: form.get('seniorityDate'),
+  });
+}
+
+async function customValues(form: FormData, existing: Record<string, unknown> = {}) {
+  const ctx = await getRequestContext();
+  const canSeeSensitive = hasAny(ctx, 'admin.members.manage');
+  const defs = (await withCtxDb(ctx, (tx) => loadFieldDefs(tx, 'member'))).filter((d) => canSeeSensitive || !d.sensitivity);
+  return validateCustom(defs, customFromForm(defs, form), existing);
+}
+
+export async function createMember(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const parsed = readMember(form);
+  const custom = await customValues(form);
+  if (!parsed.success || !custom.ok) {
+    const base = parsed.success ? { fieldErrors: {} } : zodFieldErrors(parsed.error.issues);
+    return { ok: false, message: 'Please fix the highlighted fields.', fieldErrors: { ...base.fieldErrors, ...(custom.ok ? {} : custom.fieldErrors) } };
+  }
+  const m = parsed.data;
+  return runAdmin('admin.members.manage', form, async (tx) => {
+    await tx`insert into members (tenant_id, first_name, last_name, preferred_name, employee_number, email, phone, rank_id,
+               employment_type, hire_date, seniority_date, custom)
+             values (app.tenant_id(), ${m.firstName}, ${m.lastName}, ${m.preferredName}, ${m.employeeNumber}, ${m.email}, ${m.phone},
+               ${m.rankId}, ${m.employmentType}, ${m.hireDate}, ${m.seniorityDate}, ${tx.json(custom.value as never)})`;
+    return `Added ${m.firstName} ${m.lastName}`;
+  });
+}
+
+export async function updateMember(id: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const parsed = readMember(form);
+  const ctx = await getRequestContext();
+  const [existing] = await withCtxDb(ctx, (tx) => tx<{ custom: Record<string, unknown> }[]>`select custom from members where id = ${id}`);
+  const custom = await customValues(form, existing?.custom ?? {});
+  if (!parsed.success || !custom.ok) {
+    const base = parsed.success ? { fieldErrors: {} } : zodFieldErrors(parsed.error.issues);
+    return { ok: false, message: 'Please fix the highlighted fields.', fieldErrors: { ...base.fieldErrors, ...(custom.ok ? {} : custom.fieldErrors) } };
+  }
+  const m = parsed.data;
+  const status = String(form.get('status') ?? 'active');
+  return runAdmin('admin.members.manage', form, async (tx) => {
+    await tx`update members set first_name = ${m.firstName}, last_name = ${m.lastName}, preferred_name = ${m.preferredName},
+               employee_number = ${m.employeeNumber}, email = ${m.email}, phone = ${m.phone}, rank_id = ${m.rankId},
+               employment_type = ${m.employmentType}, hire_date = ${m.hireDate}, seniority_date = ${m.seniorityDate},
+               status = ${status}, custom = ${tx.json(custom.value as never)}
+             where id = ${id}`;
+    return 'Saved';
+  });
+}
+
+export async function addAssignment(memberId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const parsed = assignmentSchema.safeParse({ orgUnitId: form.get('orgUnitId'), shiftId: form.get('shiftId'), effectiveFrom: form.get('effectiveFrom') });
+  if (!parsed.success) return zodFieldErrors(parsed.error.issues);
+  const a = parsed.data;
+  return runAdmin('admin.members.manage', form, async (tx) => {
+    // Close the open-ended current primary assignment the day the new one starts.
+    await tx`update member_assignments set effective = daterange(lower(effective), ${a.effectiveFrom}::date)
+             where member_id = ${memberId} and is_primary and upper_inf(effective) and lower(effective) < ${a.effectiveFrom}::date`;
+    await tx`insert into member_assignments (tenant_id, member_id, org_unit_id, shift_id, effective)
+             values (app.tenant_id(), ${memberId}, ${a.orgUnitId}, ${a.shiftId}, daterange(${a.effectiveFrom}::date, null))`;
+    return 'Assignment added';
+  });
+}
+
+export async function openMember(form: FormData): Promise<void> {
+  redirect(`/admin/members/${String(form.get('id'))}`);
+}

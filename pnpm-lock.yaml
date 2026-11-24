@@ -144,9 +144,16 @@ importers:
 
   packages/validators:
     dependencies:
+      '@soma/auth':
+        specifier: workspace:*
+        version: link:../auth
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
 
 packages:
 

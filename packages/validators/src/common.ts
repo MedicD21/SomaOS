@@ -5,7 +5,8 @@ export const keySchema = z.string().trim().regex(/^[a-z][a-z0-9_]{0,39}$/, 'Use 
 export const labelSchema = z.string().trim().min(1, 'Required').max(80);
 /** Form inputs send "" for "none". */
 export const optionalUuid = z
-  .union([z.uuid(), z.literal(''), z.null(), z.undefined()])
+  .union([z.uuid(), z.literal(''), z.null()])
+  .optional()
   .transform((v) => (v ? v : null));
 
 const VALID_TIMEZONES = new Set<string>([...Intl.supportedValuesOf('timeZone'), 'UTC']);
