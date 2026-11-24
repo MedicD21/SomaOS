@@ -147,4 +147,20 @@ describe('planRegularRoster', () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.patternVersion === 1)).toBe(true);
   });
+
+  it('does not expand a version past its local end date', () => {
+    const v2d: ConfigVersion<ShiftPattern> = {
+      ...v2,
+      payload: { ...v2.payload, platoons: { a: 0, b: 1, c: 2, d: 1 } },
+    };
+    const rows = planRegularRoster({
+      patterns: [v1, v2d],
+      standing: [seat({ platoon: 'd', kellyGroup: null, effectiveFrom: '2026-12-15' })],
+      members,
+      from: '2026-12-10',
+      toExclusive: '2026-12-20',
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.patternVersion === 2 && r.date >= '2026-12-15')).toBe(true);
+  });
 });

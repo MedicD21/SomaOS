@@ -47,8 +47,14 @@ export function planRegularRoster(input: {
     for (const v of input.patterns) {
       const vFrom = localDateOf(v.effectiveFrom, s.tz);
       const vFromClipped = vFrom > from ? vFrom : from;
-      // +1 day: a mid-day effectiveTo still covers that date; resolveEffective below is authoritative.
-      const vTo = v.effectiveTo === null ? to : minDate(to, addDays(localDateOf(v.effectiveTo, s.tz), 1));
+      // A mid-day effectiveTo still covers its local date; at local midnight the date itself is excluded.
+      // resolveEffective below is authoritative.
+      let vTo = to;
+      if (v.effectiveTo !== null) {
+        const endDate = localDateOf(v.effectiveTo, s.tz);
+        const atMidnight = startOfLocalDay(endDate, s.tz).getTime() === v.effectiveTo.getTime();
+        vTo = minDate(to, atMidnight ? endDate : addDays(endDate, 1));
+      }
       if (vFromClipped >= vTo) continue;
       for (const inst of expandPattern(v.payload, s.platoon, vFromClipped, vTo, s.tz)) {
         if (resolveEffective(input.patterns, startOfLocalDay(inst.date, s.tz)) !== v) continue;
