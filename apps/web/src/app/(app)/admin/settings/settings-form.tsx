@@ -44,6 +44,9 @@ export function SettingsForm({
             <label className="flex items-center gap-2">
               <input type="checkbox" name="modules" value="files" defaultChecked={enabledModules.includes('files')} /> Files
             </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="scheduling" defaultChecked={enabledModules.includes('scheduling')} /> Scheduling
+            </label>
           </fieldset>
           <Field id="reason" label="Reason for change (optional)">
             <Input id="reason" name="reason" />

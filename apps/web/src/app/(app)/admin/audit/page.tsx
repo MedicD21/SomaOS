@@ -5,7 +5,8 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { check, getRequestContext, withCtxDb } from '@/server/context';
 
 const TABLES = ['members', 'member_assignments', 'org_units', 'ranks', 'shifts', 'roles', 'role_permissions', 'role_grants',
-  'tenant_settings', 'tenants', 'memberships', 'custom_field_defs', 'config_versions', 'attachments'];
+  'tenant_settings', 'tenants', 'memberships', 'custom_field_defs', 'config_versions', 'attachments',
+  'seats', 'standing_seats', 'shift_assignments'];
 
 type Row = { id: string; occurred_at: Date; actor: string | null; table_name: string; action: string; changed_fields: string[] | null; reason: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null };
 

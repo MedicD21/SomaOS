@@ -27,20 +27,20 @@ test('build and reorganize the org tree', async ({ page }) => {
     await expect(page.locator(`[data-name="${name}"]`)).toBeVisible();
   }
 
-  await addUnit('Battalion 1', 'Battalion');
-  await addUnit('Battalion 2', 'Battalion');
-  await addUnit('Station 1', 'Station', 'Battalion 1');
-  await addUnit('Engine 1', 'Unit', 'Station 1');
-  await expect(page.locator('[data-name="Battalion 1"] [data-name="Engine 1"]')).toBeVisible();
+  await addUnit('Battalion 7', 'Battalion');
+  await addUnit('Battalion 8', 'Battalion');
+  await addUnit('Station 7', 'Station', 'Battalion 7');
+  await addUnit('Engine 7', 'Unit', 'Station 7');
+  await expect(page.locator('[data-name="Battalion 7"] [data-name="Engine 7"]')).toBeVisible();
 
-  await page.getByText('Edit Station 1').click();
-  const edit = page.getByRole('form', { name: 'Edit Station 1' });
+  await page.getByText('Edit Station 7').click();
+  const edit = page.getByRole('form', { name: 'Edit Station 7' });
   const options = await edit.getByLabel('Parent').locator('option').allTextContents();
-  expect(options).not.toContain('Station 1');
-  expect(options).not.toContain('Engine 1');
-  await edit.getByLabel('Parent').selectOption({ label: 'Battalion 2' });
+  expect(options).not.toContain('Station 7');
+  expect(options).not.toContain('Engine 7');
+  await edit.getByLabel('Parent').selectOption({ label: 'Battalion 8' });
   await edit.getByRole('button', { name: 'Save' }).click();
-  await expect(page.locator('[data-name="Battalion 2"] [data-name="Engine 1"]')).toBeVisible();
+  await expect(page.locator('[data-name="Battalion 8"] [data-name="Engine 7"]')).toBeVisible();
   await expectAccessible(page);
 });
 
