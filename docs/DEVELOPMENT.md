@@ -311,3 +311,28 @@ Plan: `docs/superpowers/plans/2026-11-24-phase-1c2-time-and-close.md`.
 ### Not yet
 Early-relief (negative) adjustments, whole-timesheet officer sign-off, per-payroll-system formats, mid-period rate or rule
 changes.
+
+## Shift trades (Phase 1d-1)
+
+Plan: `docs/superpowers/plans/2026-11-24-phase-1d-trades.md`. Page: `/trades`.
+
+- **Flow:** a member with `scheduling.trade.request` proposes swapping one of their upcoming shifts with another
+  member's → the other member accepts or declines → an officer with `scheduling.roster.edit` at **both** stations
+  approves or denies (never a party to the trade) → on approval the two shifts change hands in one database step.
+- **Rules (all enforced in SQL, `app.request_trade` / `respond_trade` / `cancel_trade` / `decide_trade`):** both shifts must
+  be upcoming, scheduled, seated and not Kelly days; an assignment is in at most one open trade; either party can withdraw
+  until it is decided; if a shift changes before approval the approval is refused. Writes to `shift_trades` only go through
+  these functions.
+- **Conflicts:** the swap relies on the roster's overlap constraints, so a trade that would double-book a member or a
+  seat is refused and nothing moves. Same-time swaps (trading stations) work because the first shift is freed during
+  the swap.
+- **Qualification:** the web layer re-checks credentials and rank for each member in the other's seat with the same
+  engine as manual fills (`tradeBlocks`). A block can be waived with a reason only by someone holding
+  `scheduling.qualification.override` at both stations; the database re-checks that and records the reason on the
+  assignments and the trade.
+- **Afterwards:** swapped shifts become type `trade` (paid by the pay rules' `trade` mapping) with a line in their
+  explain trail; both members are notified at each step.
+- **Not yet:** hours-owed/payback trades, one-way give-aways and open vacancy fill with call-back lists (1d-2), leave
+  limits per shift or station (1d-3), per-member trade limits.
+- **Existing departments:** the new permission is in the starter roles; a department created earlier must add
+  `scheduling.trade.request` to its member roles (Admin → Roles).

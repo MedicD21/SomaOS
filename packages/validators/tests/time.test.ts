@@ -36,3 +36,19 @@ describe('void / close / reopen schemas', () => {
     expect(closePeriodSchema.safeParse({ start: 'soon' }).success).toBe(false);
   });
 });
+
+describe('trade schemas', async () => {
+  const { proposeTradeSchema, decideTradeSchema } = await import('../src');
+  it('propose needs two shifts; blank note becomes null', () => {
+    const a = crypto.randomUUID();
+    const b = crypto.randomUUID();
+    expect(proposeTradeSchema.parse({ mineId: a, theirsId: b, note: '  ' }).note).toBeNull();
+    expect(proposeTradeSchema.safeParse({ mineId: a, theirsId: '' }).success).toBe(false);
+  });
+  it('an override needs a real reason', () => {
+    const id = crypto.randomUUID();
+    expect(decideTradeSchema.safeParse({ id, approve: true, overrideReason: 'no' }).success).toBe(false);
+    expect(decideTradeSchema.safeParse({ id, approve: true, overrideReason: 'Short staffed' }).success).toBe(true);
+    expect(decideTradeSchema.safeParse({ id, approve: false }).success).toBe(true);
+  });
+});

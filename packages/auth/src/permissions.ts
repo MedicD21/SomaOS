@@ -21,6 +21,7 @@ export const PERMISSIONS = {
   'scheduling.roster.view': { label: 'View roster', module: 'scheduling' },
   'scheduling.roster.edit': { label: 'Fill and change roster', module: 'scheduling' },
   'scheduling.qualification.override': { label: 'Override qualification blocks', module: 'scheduling' },
+  'scheduling.trade.request': { label: 'Propose and answer shift trades', module: 'scheduling' },
   'scheduling.config.manage': { label: 'Manage shift patterns and seats', module: 'scheduling' },
   'credentials.view': { label: 'View member credentials', module: 'credentials', sensitive: 'HR' },
   'credentials.manage': { label: 'Record member credentials', module: 'credentials', sensitive: 'HR' },

@@ -50,6 +50,9 @@ describe('scheduling templates', () => {
     expect(roles.payroll_hr).toEqual(expect.arrayContaining(['credentials.view', 'credentials.manage', 'scheduling.roster.view']));
     expect(roles.training_officer).toEqual(expect.arrayContaining(['credentials.view', 'credentials.manage']));
     expect(roles.member).toContain('scheduling.roster.view');
+    expect(roles.member).toContain('scheduling.trade.request');
+    expect(roles.company_officer).toContain('scheduling.trade.request');
+    expect(roles.external).not.toContain('scheduling.trade.request');
     expect(roles.company_officer).not.toContain('scheduling.config.manage');
   });
 });
