@@ -23,11 +23,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="ml-auto flex flex-wrap items-end gap-2">
             <NotificationBell unread={ctx.unreadNotifications} />
             {ctx.memberships.length > 1 && (
-              <form action={switchTenant} className="flex items-end gap-2">
+              <form action={switchTenant} className="flex max-w-full flex-wrap items-end gap-2">
                 <label htmlFor="tenantId" className="text-sm">
                   Department
                 </label>
-                <select id="tenantId" name="tenantId" defaultValue={ctx.tenant.id} className="min-h-11 rounded-md border border-line bg-surface px-2">
+                <select id="tenantId" name="tenantId" defaultValue={ctx.tenant.id} className="min-h-11 min-w-0 max-w-full rounded-md border border-line bg-surface px-2">
                   {ctx.memberships.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
