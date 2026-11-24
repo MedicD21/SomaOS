@@ -26,6 +26,9 @@ beforeEach(async () => {
   await sql`delete from jobs where kind = 'credential-expiry-scan'`;
   await sql`delete from notifications where tenant_id = ${tenantId}`;
   await sql`delete from member_credentials where tenant_id = ${tenantId}`;
+  await sql`update members set status = 'active' where tenant_id = ${tenantId}`;
+  await sql`update credential_types set warn_days = '{90,60,30,7}' where id = ${typeId}`;
+  await sql`drop trigger if exists fail_notify on notifications`;
 });
 
 const addCredential = async (expiresOn: string, last: number | null, status = 'active') => {
@@ -38,14 +41,14 @@ const notes = () => sql`select kind, title, link from notifications where tenant
 describe('credentialExpiryScan', () => {
   it('warns once at the crossed threshold and schedules exactly one next scan', async () => {
     const id = await addCredential('2026-12-24', 60);
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 1 });
+    await credentialExpiryScan(sql, NOW); // scan is global; assert on this tenant's rows only
     expect(await notes()).toEqual([
       { kind: 'credential.expiring', title: 'Paramedic expires in 30 days', link: `/admin/members/${memberId}` },
     ]);
     const [c] = await sql`select last_warned_days from member_credentials where id = ${id}`;
     expect(c!.last_warned_days).toBe(30);
 
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 0 });
+    expect((await credentialExpiryScan(sql, NOW)).warned).toBe(0);
     expect(await notes()).toHaveLength(1);
 
     const jobs = await sql`select run_after from jobs where kind = 'credential-expiry-scan' and status = 'pending'`;
@@ -55,8 +58,8 @@ describe('credentialExpiryScan', () => {
 
   it('warns once that an expired credential has expired', async () => {
     await addCredential('2026-11-20', null);
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 1 });
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 0 });
+    await credentialExpiryScan(sql, NOW);
+    expect((await credentialExpiryScan(sql, NOW)).warned).toBe(0);
     expect((await notes()).map((n) => n.title)).toEqual(['Paramedic has expired']);
   });
 
@@ -67,19 +70,39 @@ describe('credentialExpiryScan', () => {
     await sql`update member_credentials set expires_on = '2026-11-24', last_warned_days = 1 where tenant_id = ${tenantId}`;
     await credentialExpiryScan(sql, NOW);
     expect((await notes()).map((n) => n.title)).toEqual(['Paramedic expires in 1 day', 'Paramedic expires today']);
-    await sql`update credential_types set warn_days = '{90,60,30,7}' where id = ${typeId}`;
   });
 
   it('ignores revoked credentials', async () => {
     await addCredential('2026-12-24', 60, 'revoked');
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 0 });
+    await credentialExpiryScan(sql, NOW);
     expect(await notes()).toHaveLength(0);
   });
 
   it('ignores separated members', async () => {
     await addCredential('2026-12-24', 60);
     await sql`update members set status = 'separated' where id = ${memberId}`;
-    expect(await credentialExpiryScan(sql, NOW)).toEqual({ warned: 0 });
-    await sql`update members set status = 'active' where id = ${memberId}`;
+    await credentialExpiryScan(sql, NOW);
+    expect(await notes()).toHaveLength(0);
+  });
+
+  it('isolates a failing row, still warns others, keeps the next job, and rethrows', async () => {
+    const [bad] = await sql`insert into members (tenant_id, first_name, last_name, employment_type)
+      values (${tenantId}, 'Bad', 'Row', 'career_full_time') returning id`;
+    await sql.unsafe(`create or replace function public.fail_notify_fn() returns trigger language plpgsql as $f$
+      begin
+        if new.member_id = '${bad!.id}' then raise exception 'forced failure'; end if;
+        return new;
+      end $f$`);
+    await sql.unsafe('create trigger fail_notify before insert on notifications for each row execute function public.fail_notify_fn()');
+    await sql`insert into member_credentials (tenant_id, member_id, type_id, issued_on, expires_on, last_warned_days)
+              values (${tenantId}, ${bad!.id}, ${typeId}, '2020-01-01', '2026-12-24', 60)`;
+    await addCredential('2026-12-24', 60);
+    await expect(credentialExpiryScan(sql, NOW)).rejects.toThrow(/1 of \d+ credential\(s\) failed/);
+    expect((await notes()).map((n) => n.link)).toEqual([`/admin/members/${memberId}`]);
+    const [bc] = await sql`select last_warned_days from member_credentials where member_id = ${bad!.id}`;
+    expect(bc!.last_warned_days).toBe(60);
+    expect(await sql`select 1 from jobs where kind = 'credential-expiry-scan' and status = 'pending'`).toHaveLength(1);
+    await sql`drop trigger fail_notify on notifications`;
+    await sql`drop function public.fail_notify_fn()`;
   });
 });

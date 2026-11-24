@@ -44,25 +44,35 @@ export async function credentialExpiryScan(sql: postgres.Sql, now: Date): Promis
     join tenants tn on tn.id = c.tenant_id and tn.status = 'active'
     where c.status = 'active' and c.expires_on is not null`;
 
-  let warned = 0;
-  for (const r of rows) {
-    const today = localDateOf(now, r.timezone);
-    const due = dueWarning(r.expires_on, today, r.warn_days, r.last_warned_days);
-    if (due === null) continue;
-    const daysUntil = daysBetween(today, r.expires_on);
-    const title = titleFor(r.label, daysUntil);
-    const sent = await sql.begin(async (tx) => {
-      // Re-check under a row lock so concurrent scans cannot double-notify.
-      const [cur] = await tx<{ last_warned_days: number | null }[]>`
-        select last_warned_days from member_credentials where id = ${r.id} for update`;
-      if (!cur || cur.last_warned_days !== r.last_warned_days) return false;
-      await tx`select app.notify(${r.member_id}, 'credential.expiring', ${title}, ${`Expiry date: ${r.expires_on}`}, ${`/admin/members/${r.member_id}`})`;
-      await tx`update member_credentials set last_warned_days = ${due} where id = ${r.id}`;
-      return true;
-    });
-    if (sent) warned++;
-  }
-
+  // Enqueue the next run first so a failure below can never break the daily chain
+  // (the running job is not 'pending', so this does not collide with itself).
   await ensureScanJob(sql, nextScanTime(now));
+
+  let warned = 0;
+  const failures: string[] = [];
+  for (const r of rows) {
+    try {
+      const today = localDateOf(now, r.timezone);
+      const due = dueWarning(r.expires_on, today, r.warn_days, r.last_warned_days);
+      if (due === null) continue;
+      const title = titleFor(r.label, daysBetween(today, r.expires_on));
+      const sent = await sql.begin(async (tx) => {
+        // Re-check under a row lock so concurrent scans cannot double-notify or warn on stale data.
+        const [cur] = await tx<{ last_warned_days: number | null }[]>`
+          select last_warned_days from member_credentials
+          where id = ${r.id} and status = 'active' and expires_on = ${r.expires_on}::date for update`;
+        if (!cur || cur.last_warned_days !== r.last_warned_days) return false;
+        await tx`select app.notify(${r.member_id}, 'credential.expiring', ${title}, ${`Expiry date: ${r.expires_on}`}, ${`/admin/members/${r.member_id}`})`;
+        await tx`update member_credentials set last_warned_days = ${due} where id = ${r.id}`;
+        return true;
+      });
+      if (sent) warned++;
+    } catch (e) {
+      failures.push(`${r.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`credential expiry scan: ${failures.length} of ${rows.length} credential(s) failed (${warned} warned): ${failures.join('; ')}`);
+  }
   return { warned };
 }
