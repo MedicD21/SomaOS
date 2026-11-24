@@ -1,0 +1,16 @@
+{
+  "name": "@soma/schedule-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "lint": "eslint src tests",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "temporal-polyfill": "^1.0.8"
+  }
+}
