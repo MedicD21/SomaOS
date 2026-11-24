@@ -32,6 +32,8 @@ importers:
 
   packages/auth: {}
 
+  packages/config-core: {}
+
   packages/db:
     dependencies:
       postgres:
