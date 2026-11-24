@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@soma/templates": "workspace:*",
-    "@soma/auth": "workspace:*"
+    "@soma/auth": "workspace:*",
+    "@soma/validators": "workspace:*"
   }
 }

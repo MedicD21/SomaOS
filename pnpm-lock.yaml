@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:packages/schedule-engine
       '@soma/templates':
         specifier: workspace:*
         version: link:packages/templates
@@ -150,6 +153,9 @@ importers:
       '@soma/templates':
         specifier: workspace:*
         version: link:../templates
+      '@soma/validators':
+        specifier: workspace:*
+        version: link:../validators
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
@@ -168,7 +174,13 @@ importers:
       '@soma/auth':
         specifier: workspace:*
         version: link:../auth
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:../schedule-engine
     devDependencies:
+      '@soma/validators':
+        specifier: workspace:*
+        version: link:../validators
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6

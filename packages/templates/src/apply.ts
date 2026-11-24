@@ -35,6 +35,20 @@ export async function applyTemplate(
                values (${tenantId}, ${row!.id}, ${p}) on conflict do nothing`;
     }
   }
+  for (const c of template.credentialTypes) {
+    await tx`insert into credential_types (tenant_id, key, label, validity, warn_days)
+             values (${tenantId}, ${c.key}, ${c.label}, ${tx.json(c.validity)}, ${c.warnDays})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  if (template.schedulePattern) {
+    const { key, payload } = template.schedulePattern;
+    await tx`insert into config_versions (tenant_id, kind, key, version, status, effective, payload, approved_at)
+             select t.id, 'schedule.pattern', ${key}, 1, 'approved',
+                    tstzrange((${payload.anchorDate}::date)::timestamp at time zone t.timezone, null),
+                    ${tx.json(payload)}, now()
+             from tenants t where t.id = ${tenantId}
+             on conflict (tenant_id, kind, key, version) do nothing`;
+  }
   await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
            where tenant_id = ${tenantId} and enabled_modules = '{}'`;
 

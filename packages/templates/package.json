@@ -11,10 +11,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@soma/auth": "workspace:*"
+    "@soma/auth": "workspace:*",
+    "@soma/schedule-engine": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "postgres": "*"
+    "postgres": "*",
+    "@soma/validators": "workspace:*"
   }
 }

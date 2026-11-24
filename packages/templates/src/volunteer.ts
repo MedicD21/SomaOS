@@ -1,4 +1,5 @@
 import { DEFAULT_ROLES } from './roles';
+import { DEFAULT_CREDENTIAL_TYPES } from './credential-types';
 import type { DepartmentTemplate } from './types';
 
 export const volunteer: DepartmentTemplate = {
@@ -18,5 +19,7 @@ export const volunteer: DepartmentTemplate = {
   ],
   shifts: [],
   roles: DEFAULT_ROLES,
-  enabledModules: ['admin', 'files'],
+  enabledModules: ['admin', 'files', 'scheduling'],
+  credentialTypes: DEFAULT_CREDENTIAL_TYPES,
+  schedulePattern: null,
 };
