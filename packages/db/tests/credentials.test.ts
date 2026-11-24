@@ -8,7 +8,6 @@ import {
   createRole,
   createOrgUnit,
   createTenant,
-  expectTenantIsolation,
   grantRole,
   userInTenant,
 } from './helpers';
