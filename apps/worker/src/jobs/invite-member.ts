@@ -27,9 +27,10 @@ export async function inviteMember(
 ): Promise<void> {
   const p = payloadSchema.parse(payload);
   const acceptUrl = `${deps.appUrl}/invites`;
+  const welcomeUrl = `${deps.appUrl}/auth/welcome`;
   const existing = await deps.sql<{ id: string }[]>`select id from auth.users where lower(email) = lower(${p.email})`;
   if (existing.length === 0) {
-    const r = await deps.auth.inviteUserByEmail(p.email, acceptUrl);
+    const r = await deps.auth.inviteUserByEmail(p.email, welcomeUrl);
     if ('error' in r) throw new Error(`invite failed: ${r.error}`);
     return;
   }

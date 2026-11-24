@@ -194,3 +194,16 @@ not stop the others (failures are reported when the run ends).
 ### Running the tests
 Run `pnpm db:reset` before `pnpm test:db` if you have just run the end-to-end suite: the end-to-end tests generate rosters
 in the demo department, and a few database tests expect a freshly seeded database. CI uses a separate database per job.
+
+## Onboarding a new member
+1. An admin adds the member (with an email) and clicks **Send sign-in invitation** on their page. This queues an
+   `invite-member` job and an invitation record; nothing is linked to any account yet.
+2. The worker emails the invitee. A **new** email gets Supabase's invitation link; an email that already has an account
+   gets a notice to sign in and accept at `/invites`.
+3. The invitation link opens `/auth/welcome`. The link delivers one-time tokens in the URL **fragment**, which only the
+   browser can read. The app's client uses PKCE, which refuses fragment callbacks, so the page sets the session explicitly
+   with `setSession` and removes the tokens from the address bar and history.
+4. The invitee chooses a password (at least 12 characters; Supabase enforces the same minimum,
+   `minimum_password_length` in `supabase/config.toml`), then accepts the invitation at `/invites`.
+
+Local email (including these links) is in Mailpit at http://127.0.0.1:54324.
