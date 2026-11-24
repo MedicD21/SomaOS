@@ -1,7 +1,7 @@
 import { resolveEffective, type ConfigVersion } from '@soma/config-core';
 import type { Explain } from './explain';
 import { expandPattern, isKellyShift, type ShiftPattern } from './pattern';
-import { startOfLocalDay, type IsoDate } from './time';
+import { addDays, localDateOf, startOfLocalDay, type IsoDate } from './time';
 
 export type StandingSeat = {
   memberId: string;
@@ -45,7 +45,12 @@ export function planRegularRoster(input: {
     if (from >= to) continue;
 
     for (const v of input.patterns) {
-      for (const inst of expandPattern(v.payload, s.platoon, from, to, s.tz)) {
+      const vFrom = localDateOf(v.effectiveFrom, s.tz);
+      const vFromClipped = vFrom > from ? vFrom : from;
+      // +1 day: a mid-day effectiveTo still covers that date; resolveEffective below is authoritative.
+      const vTo = v.effectiveTo === null ? to : minDate(to, addDays(localDateOf(v.effectiveTo, s.tz), 1));
+      if (vFromClipped >= vTo) continue;
+      for (const inst of expandPattern(v.payload, s.platoon, vFromClipped, vTo, s.tz)) {
         if (resolveEffective(input.patterns, startOfLocalDay(inst.date, s.tz)) !== v) continue;
         const kelly = isKellyShift(v.payload, inst.index, s.kellyGroup);
         out.push({
@@ -72,6 +77,7 @@ export function planRegularRoster(input: {
   }
 
   return out.sort(
-    (a, b) => a.start.getTime() - b.start.getTime() || a.memberId.localeCompare(b.memberId),
+    (a, b) =>
+      a.start.getTime() - b.start.getTime() || (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0),
   );
 }

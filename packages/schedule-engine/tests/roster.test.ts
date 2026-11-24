@@ -131,4 +131,20 @@ describe('planRegularRoster', () => {
       planRegularRoster({ patterns: [], standing: [seat()], members, from: '2026-01-01', toExclusive: '2026-02-01' }),
     ).toEqual([]);
   });
+
+  it('skips pattern versions outside the range even if they lack the platoon', () => {
+    const v2ab: ConfigVersion<ShiftPattern> = {
+      ...v2,
+      payload: { ...v2.payload, platoons: { a: 0, b: 1 } },
+    };
+    const rows = planRegularRoster({
+      patterns: [v1, v2ab],
+      standing: [seat({ platoon: 'c', kellyGroup: null })],
+      members,
+      from: '2026-12-01',
+      toExclusive: '2026-12-15',
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.patternVersion === 1)).toBe(true);
+  });
 });
