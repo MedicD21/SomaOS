@@ -4,19 +4,27 @@ import type { Permission } from '@soma/auth';
 import type { RequestContext } from './context';
 import { check, getRequestContext, withCtxDb } from './context';
 import type { Tx } from './db';
+import { ActionError } from './errors';
+
+export { ActionError };
 
 export type ActionResult = { ok: boolean | null; message: string | null; fieldErrors?: Record<string, string> };
 export const IDLE: ActionResult = { ok: null, message: null };
 
 /** Maps database errors to messages a department admin can act on. */
 export function friendlyDbError(e: unknown): string {
+  if (e instanceof ActionError) return e.message;
   const msg = e instanceof Error ? e.message : String(e);
   if (/org unit cycle/.test(msg)) return 'A unit cannot be moved under itself or one of its own sub-units.';
   if (/cannot remove last admin/.test(msg)) return 'cannot remove last admin: the department must keep at least one department-wide admin.';
   if (/duplicate key/.test(msg)) return 'That key or name is already in use.';
   if (/member_assignments_no_overlap/.test(msg)) return 'That member already has a primary assignment for those dates.';
+  if (/shift_assignments_seat_no_overlap/.test(msg)) return 'That seat is already filled for that time.';
+  if (/shift_assignments_member_no_overlap/.test(msg)) return 'That member is already scheduled during that time.';
+  if (/standing_seats_member_no_overlap/.test(msg)) return 'That member already has a regular seat for those dates.';
   if (/row-level security|permission denied/.test(msg)) return 'You do not have permission to make that change.';
   if (/unknown timezone/.test(msg)) return 'Unknown time zone.';
+  if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';
   console.error(e);
   return 'Something went wrong saving your change.';
 }

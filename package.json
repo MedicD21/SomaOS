@@ -15,11 +15,12 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset && tsx scripts/seed-dev.ts",
     "test:unit": "turbo run test --filter=!@soma/db",
-    "test:db": "pnpm -F @soma/db test && pnpm -F @soma/worker test:db",
+    "test:db": "pnpm -F @soma/db test && pnpm -F @soma/worker test:db && pnpm -F @soma/web test:db",
     "db:seed": "tsx scripts/seed-dev.ts",
     "env:local": "tsx scripts/write-env.ts"
   },
   "devDependencies": {
+    "@soma/schedule-engine": "workspace:*",
     "@soma/templates": "workspace:*",
     "eslint": "^10.15.0",
     "postgres": "^4.1.1",

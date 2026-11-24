@@ -1,4 +1,5 @@
 import { DEFAULT_ROLES } from './roles';
+import { DEFAULT_CREDENTIAL_TYPES } from './credential-types';
 import type { DepartmentTemplate } from './types';
 
 export const career3Platoon: DepartmentTemplate = {
@@ -27,5 +28,17 @@ export const career3Platoon: DepartmentTemplate = {
     { key: 'c', label: 'C Shift', color: '#16a34a' },
   ],
   roles: DEFAULT_ROLES,
-  enabledModules: ['admin', 'files'],
+  enabledModules: ['admin', 'files', 'scheduling'],
+  credentialTypes: DEFAULT_CREDENTIAL_TYPES,
+  schedulePattern: {
+    key: 'default',
+    payload: {
+      cycle: ['on', 'off', 'off'],
+      shiftStart: '07:00',
+      shiftHours: 24,
+      anchorDate: '2026-01-01',
+      platoons: { a: 0, b: 1, c: 2 },
+      kelly: { everyNthShift: 9 },
+    },
+  },
 };

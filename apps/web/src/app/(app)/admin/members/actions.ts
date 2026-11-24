@@ -1,9 +1,12 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { assignmentSchema, memberSchema } from '@soma/validators';
+import { credentialExpiry, type Validity } from '@soma/schedule-engine';
+import { assignmentSchema, memberCredentialSchema, memberSchema, standingSeatSchema } from '@soma/validators';
+import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
-import { runAdmin, zodFieldErrors } from '@/server/actions';
-import { getRequestContext, hasAny, withCtxDb } from '@/server/context';
+import { ActionError, runAdmin, zodFieldErrors } from '@/server/actions';
+import { check, getRequestContext, hasAny, withCtxDb } from '@/server/context';
+import { changeStandingSeat } from '@/server/scheduling/standing';
 import { customFromForm, loadFieldDefs, validateCustom } from '@/server/custom-fields';
 
 function readMember(form: FormData) {
@@ -82,5 +85,60 @@ export async function sendInvite(memberId: string, _prev: ActionResult, form: Fo
   return runAdmin('admin.members.manage', form, async (tx) => {
     await tx`select app.enqueue_invite(${memberId})`;
     return 'Invitation queued — it will be emailed shortly.';
+  });
+}
+
+const uuid = z.uuid();
+
+/** Starts a standing seat; see changeStandingSeat. Also supersedes the member's future generated shifts. */
+export async function saveStandingSeat(memberId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const kelly = String(form.get('kellyGroup') ?? '').trim();
+  const parsed = standingSeatSchema.safeParse({
+    memberId,
+    seatId: form.get('seatId'),
+    platoonShiftId: form.get('platoonShiftId'),
+    kellyGroup: kelly === '' ? undefined : kelly,
+    effectiveFrom: form.get('effectiveFrom'),
+  });
+  if (!parsed.success) return zodFieldErrors(parsed.error.issues);
+  const ctx = await getRequestContext();
+  // Superseding the member's generated shifts (incl. seatless Kelly days) needs department roster edit.
+  const roster = check(ctx, 'scheduling.roster.edit');
+  if (!roster.allowed) return { ok: false, message: `Not allowed: ${roster.reason}` };
+  return runAdmin('scheduling.config.manage', form, async (tx) => {
+    const r = await changeStandingSeat(tx, parsed.data);
+    return `Standing seat saved from ${parsed.data.effectiveFrom}` + (r.superseded ? `; ${r.superseded} future generated shifts withdrawn — regenerate the schedule.` : '');
+  });
+}
+
+/** Records a credential; the expiry is computed here from the type's validity, never taken from the form. */
+export async function addCredential(memberId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const number = String(form.get('number') ?? '').trim();
+  const parsed = memberCredentialSchema.safeParse({
+    memberId,
+    typeId: form.get('typeId'),
+    issuedOn: form.get('issuedOn'),
+    number: number || undefined,
+  });
+  if (!parsed.success) return zodFieldErrors(parsed.error.issues);
+  const c = parsed.data;
+  return runAdmin('credentials.manage', form, async (tx) => {
+    const [type] = await tx<{ label: string; validity: Validity }[]>`
+      select label, validity from credential_types where id = ${c.typeId} and tenant_id = app.tenant_id() and status = 'active'`;
+    if (!type) throw new ActionError('That credential type is not available.');
+    const expiresOn = credentialExpiry(type.validity, c.issuedOn);
+    await tx`insert into member_credentials (tenant_id, member_id, type_id, number, issued_on, expires_on)
+             values (app.tenant_id(), ${c.memberId}, ${c.typeId}, ${c.number ?? null}, ${c.issuedOn}, ${expiresOn})`;
+    return `Added ${type.label}`;
+  });
+}
+
+export async function revokeCredential(credentialId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  if (!uuid.safeParse(credentialId).success) return { ok: false, message: 'That credential was not found.' };
+  return runAdmin('credentials.manage', form, async (tx) => {
+    const rows = await tx`update member_credentials set status = 'revoked'
+                          where id = ${credentialId} and tenant_id = app.tenant_id() and status = 'active' returning id`;
+    if (rows.length === 0) throw new ActionError('That credential was not found or is already revoked.');
+    return 'Credential revoked';
   });
 }

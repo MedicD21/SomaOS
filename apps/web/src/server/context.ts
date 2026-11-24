@@ -26,6 +26,9 @@ export type RequestContext = {
   aal: 'aal1' | 'aal2';
 };
 
+/** Local dev only: SOMA_DEV_SKIP_MFA=1 skips the MFA redirect. Never honored in production builds. */
+const devSkipMfa = process.env.NODE_ENV !== 'production' && process.env.SOMA_DEV_SKIP_MFA === '1';
+
 export class ForbiddenError extends Error {
   constructor(reason: string) {
     super(`Forbidden: ${reason}`);
@@ -62,7 +65,7 @@ export const getRequestContext = cache(async (): Promise<RequestContext> => {
 
   const grants = toGrants(data.grantRows);
   const aal = claims.aal === 'aal2' ? 'aal2' : 'aal1';
-  if (requiresMfa(grants) && aal !== 'aal2') redirect('/mfa');
+  if (requiresMfa(grants) && aal !== 'aal2' && !devSkipMfa) redirect('/mfa');
 
   return {
     userId: claims.sub,

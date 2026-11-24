@@ -9,6 +9,7 @@
   --color-brand: #b91c1c;
   --color-brand-text: #ffffff;
   --color-danger: #b91c1c;
+  --color-warning: #92400e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +22,7 @@
     --color-brand: #dc2626;
     --color-brand-text: #ffffff;
     --color-danger: #fca5a5;
+    --color-warning: #fcd34d;
   }
 }
 
@@ -33,6 +35,7 @@
   --color-brand: var(--color-brand);
   --color-on-brand: var(--color-brand-text);
   --color-danger: var(--color-danger);
+  --color-warning: var(--color-warning);
 }
 
 body {

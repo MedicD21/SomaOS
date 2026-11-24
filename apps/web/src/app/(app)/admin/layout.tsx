@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { getRequestContext, hasAny, t } from '@/server/context';
-import { ADMIN_NAV } from '@/server/nav';
+import { getRequestContext, t } from '@/server/context';
+import { visibleAdminNav } from '@/server/nav';
 
 const TERM_FOR: Record<string, [string, string]> = { '/admin/shifts': ['shifts', 'Shifts'], '/admin/members': ['members', 'Members'] };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getRequestContext();
-  const items = ADMIN_NAV.filter((i) => i.anyOf.some((p) => hasAny(ctx, p)));
+  const items = visibleAdminNav(ctx);
   return (
     <div className="grid gap-6 md:grid-cols-[12rem_1fr]">
       <nav aria-label="Admin">

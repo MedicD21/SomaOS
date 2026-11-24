@@ -3,20 +3,21 @@ import { ALL_PERMISSIONS } from '@soma/auth';
 import type { DepartmentTemplate } from './types';
 
 const VIEW: Permission[] = ['files.view'];
+const ROSTER: Permission[] = ['scheduling.roster.view', 'scheduling.roster.edit'];
 const OFFICER: Permission[] = ['admin.members.view', 'files.view', 'files.upload', 'notifications.send'];
 
 /** Default roles from the master design §5.5. Departments clone and edit these. */
 export const DEFAULT_ROLES: DepartmentTemplate['roles'] = [
   { key: 'dept_admin', label: 'Department Admin', permissions: [...ALL_PERMISSIONS] },
-  { key: 'chief_officer', label: 'Chief Officer', permissions: [...OFFICER, 'admin.members.manage', 'admin.audit.view', 'admin.config.manage'] },
-  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: OFFICER },
-  { key: 'company_officer', label: 'Company Officer', permissions: OFFICER },
-  { key: 'member', label: 'Member', permissions: VIEW },
-  { key: 'volunteer', label: 'Volunteer', permissions: VIEW },
-  { key: 'probationary', label: 'Probationary', permissions: VIEW },
-  { key: 'scheduler', label: 'Scheduler', permissions: OFFICER },
-  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, 'admin.members.manage', 'admin.custom_fields.manage'] },
-  { key: 'training_officer', label: 'Training Officer', permissions: OFFICER },
+  { key: 'chief_officer', label: 'Chief Officer', permissions: [...OFFICER, ...ROSTER, 'scheduling.qualification.override', 'admin.members.manage', 'admin.audit.view', 'admin.config.manage'] },
+  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: [...OFFICER, ...ROSTER] },
+  { key: 'company_officer', label: 'Company Officer', permissions: [...OFFICER, ...ROSTER] },
+  { key: 'member', label: 'Member', permissions: [...VIEW, 'scheduling.roster.view'] },
+  { key: 'volunteer', label: 'Volunteer', permissions: [...VIEW, 'scheduling.roster.view'] },
+  { key: 'probationary', label: 'Probationary', permissions: [...VIEW, 'scheduling.roster.view'] },
+  { key: 'scheduler', label: 'Scheduler', permissions: [...OFFICER, ...ROSTER, 'scheduling.config.manage', 'scheduling.qualification.override'] },
+  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, 'admin.members.manage', 'admin.custom_fields.manage', 'credentials.view', 'credentials.manage', 'scheduling.roster.view'] },
+  { key: 'training_officer', label: 'Training Officer', permissions: [...OFFICER, 'credentials.view', 'credentials.manage'] },
   { key: 'logistics_officer', label: 'Logistics / Inventory Officer', permissions: OFFICER },
   { key: 'ems_officer', label: 'EMS Officer / QA Reviewer', permissions: OFFICER },
   { key: 'medical_director', label: 'Medical Director', permissions: VIEW },

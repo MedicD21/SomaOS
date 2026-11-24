@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Tx } from '../src/test-harness';
 import { asUser, closeTestDb, expectDbError, withAdmin } from '../src/test-harness';
-import { createMember, createRole, createTenant, grantRole, userInTenant } from './helpers';
+import { addCredential, createCredentialType, createMember, createRole, createTenant, grantRole, userInTenant } from './helpers';
 
 afterAll(closeTestDb);
 
@@ -66,6 +66,55 @@ describe('tenant-files storage bucket', () => {
       await asUser(tx, { sub: noPerm, tenant_id: a }, async () => {
         expect((await tx`select 1 from attachments`).length).toBe(0);
       });
+    });
+  });
+});
+
+describe('sensitive (HR) credential documents', () => {
+  async function person(tx: Tx, t: string, perms: string[]) {
+    const u = await userInTenant(tx, t);
+    const m = await createMember(tx, t, { userId: u });
+    await grantRole(tx, t, m, await createRole(tx, t, `p_${m.slice(0, 8)}`, perms));
+    return { u, m };
+  }
+
+  it('are visible only to the credential owner and credentials.view holders', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx, 'A');
+      const owner = await person(tx, t, ['files.view']);
+      const plain = await person(tx, t, ['files.view', 'files.upload', 'admin.members.view']);
+      const hr = await person(tx, t, ['files.view', 'credentials.view']);
+      const cred = await addCredential(tx, t, owner.m, await createCredentialType(tx, t, 'hazmat', { kind: 'none' }), null);
+      const path = `${t}/member_credential/${cred}/${crypto.randomUUID()}-card.pdf`;
+      await tx`insert into storage.objects (bucket_id, name) values ('tenant-files', ${path})`;
+      await tx`insert into attachments (tenant_id, entity, entity_id, object_path, file_name, mime_type, size_bytes, sha256, sensitivity)
+               values (${t}, 'member_credential', ${cred}, ${path}, 'card.pdf', 'application/pdf', 1, 'x', 'HR')`;
+      const sees = async (u: string) =>
+        asUser(tx, { sub: u, tenant_id: t }, async () => ({
+          row: (await tx`select 1 from attachments where object_path = ${path}`).length,
+          object: (await tx`select 1 from storage.objects where name = ${path}`).length,
+        }));
+      expect(await sees(plain.u)).toEqual({ row: 0, object: 0 });
+      expect(await sees(owner.u)).toEqual({ row: 1, object: 1 });
+      expect(await sees(hr.u)).toEqual({ row: 1, object: 1 });
+    });
+  });
+
+  it('keep ordinary attachments and in-flight uploads readable', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx, 'A');
+      const up = await person(tx, t, ['files.view', 'files.upload']);
+      const other = await person(tx, t, ['files.view']);
+      const path = `${t}/member/${up.m}/${crypto.randomUUID()}-a.pdf`;
+      await asUser(tx, { sub: up.u, tenant_id: t }, async () => {
+        // The storage API reads the object back right after inserting it, before the attachments row exists.
+        const [o] = await tx`insert into storage.objects (bucket_id, name, owner_id) values ('tenant-files', ${path}, auth.uid()::text) returning name`;
+        expect(o!.name).toBe(path);
+      });
+      expect(await asUser(tx, { sub: other.u, tenant_id: t }, async () => (await tx`select 1 from storage.objects where name = ${path}`).length)).toBe(0);
+      await tx`insert into attachments (tenant_id, entity, entity_id, object_path, file_name, mime_type, size_bytes, sha256)
+               values (${t}, 'member', ${up.m}, ${path}, 'a.pdf', 'application/pdf', 1, 'x')`;
+      expect(await asUser(tx, { sub: other.u, tenant_id: t }, async () => (await tx`select 1 from storage.objects where name = ${path}`).length)).toBe(1);
     });
   });
 });

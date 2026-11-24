@@ -162,3 +162,26 @@ describe('F1/F6: invitations require the invitee’s consent and verified email'
     });
   });
 });
+
+describe('TRUNCATE bypasses RLS', () => {
+  it('no public table grants TRUNCATE to anon or authenticated', async () => {
+    await withAdmin(async (tx) => {
+      const rows = await tx`
+        select c.relname, r.rolname
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+        cross join (values ('anon'), ('authenticated')) as r(rolname)
+        where c.relkind in ('r','p')
+          and has_table_privilege(r.rolname, c.oid, 'TRUNCATE')`;
+      expect(rows).toEqual([]);
+    });
+  });
+
+  it('tables created later by postgres do not grant TRUNCATE by default', async () => {
+    await withAdmin(async (tx) => {
+      await tx`create table public.tmp_truncate_probe (id int)`;
+      const [r] = await tx`select has_table_privilege('authenticated', 'public.tmp_truncate_probe', 'TRUNCATE') as t`;
+      expect(r!.t).toBe(false);
+    });
+  });
+});

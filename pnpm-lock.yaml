@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:packages/schedule-engine
       '@soma/templates':
         specifier: workspace:*
         version: link:packages/templates
@@ -50,6 +53,9 @@ importers:
       '@soma/custom-fields':
         specifier: workspace:*
         version: link:../../packages/custom-fields
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:../../packages/schedule-engine
       '@soma/validators':
         specifier: workspace:*
         version: link:../../packages/validators
@@ -84,6 +90,9 @@ importers:
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
+      '@soma/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@tailwindcss/postcss':
         specifier: ^4.3.5
         version: 4.3.5
@@ -105,6 +114,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:../../packages/schedule-engine
       '@supabase/supabase-js':
         specifier: ^2.119.2
         version: 2.119.2
@@ -150,16 +162,34 @@ importers:
       '@soma/templates':
         specifier: workspace:*
         version: link:../templates
+      '@soma/validators':
+        specifier: workspace:*
+        version: link:../validators
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
+
+  packages/schedule-engine:
+    dependencies:
+      '@soma/config-core':
+        specifier: workspace:*
+        version: link:../config-core
+      temporal-polyfill:
+        specifier: ^1.0.8
+        version: 1.0.8
 
   packages/templates:
     dependencies:
       '@soma/auth':
         specifier: workspace:*
         version: link:../auth
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:../schedule-engine
     devDependencies:
+      '@soma/validators':
+        specifier: workspace:*
+        version: link:../validators
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
@@ -1609,6 +1639,15 @@ packages:
     resolution: {integrity: sha512-NHFiWnAbMJxNNpBwiO7jJVGDuqMxT9/oV8v57RR+fgBQShkJil5inGD8/xWy0hjLyHQyX1tu27QANhlz3KBqCg==}
     engines: {node: '>=6'}
 
+  temporal-polyfill@1.0.8:
+    resolution: {integrity: sha512-RCCGa0GddT099XG49ijdD0tDf86L8vfuZun1+JyJiO4Y2NP9PACQsG0OnvNPXwVLisdvhr/zqL2nhKQmXXx08A==}
+
+  temporal-spec@1.0.1:
+    resolution: {integrity: sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==}
+
+  temporal-utils@1.0.4:
+    resolution: {integrity: sha512-4mAcgbWlaxe+gn23gk8g0iHxCVGVOhKzSCfF5HM3lfvH8BdT+/pBmH/R/E4CrIse+koUgs8ThkPzCLnui6Fi8w==}
+
   tinybench@6.2.5:
     resolution: {integrity: sha512-b/8GRMdnY4cqkfCLyaFpTGIv1qwfi3oT0mWaepwT++6Z/ZrYehNfZZ2JDKVLKGhNoEkS3IIB1ELtCT0XS5DtOA==}
     engines: {node: '>=20.0.0'}
@@ -3013,6 +3052,15 @@ snapshots:
   tailwindcss@4.3.5: {}
 
   tapable@2.3.4: {}
+
+  temporal-polyfill@1.0.8:
+    dependencies:
+      temporal-spec: 1.0.1
+      temporal-utils: 1.0.4
+
+  temporal-spec@1.0.1: {}
+
+  temporal-utils@1.0.4: {}
 
   tinybench@6.2.5: {}
 

@@ -101,3 +101,34 @@ export async function grantRole(
     returning id`;
   return r[0]!.id;
 }
+
+export async function createCredentialType(
+  tx: Tx,
+  tenantId: string,
+  key: string,
+  validity: Record<string, unknown> = { kind: 'fixed', months: 24 },
+): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into credential_types (tenant_id, key, label, validity)
+    values (${tenantId}, ${key}, ${key}, ${tx.json(validity as never)}) returning id`;
+  return r[0]!.id;
+}
+
+export async function addCredential(
+  tx: Tx,
+  tenantId: string,
+  memberId: string,
+  typeId: string,
+  expiresOn: string | null,
+): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into member_credentials (tenant_id, member_id, type_id, issued_on, expires_on)
+    values (${tenantId}, ${memberId}, ${typeId}, '2025-01-01', ${expiresOn}) returning id`;
+  return r[0]!.id;
+}
+
+export async function createSeat(tx: Tx, tenantId: string, orgUnitId: string, label = 'Engine 1 Officer'): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into seats (tenant_id, org_unit_id, label) values (${tenantId}, ${orgUnitId}, ${label}) returning id`;
+  return r[0]!.id;
+}
