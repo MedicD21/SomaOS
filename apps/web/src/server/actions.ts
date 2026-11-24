@@ -27,6 +27,7 @@ export function friendlyDbError(e: unknown): string {
   if (/standing_seats_member_no_overlap/.test(msg)) return 'That member already has a regular seat for those dates.';
   if (/row-level security|permission denied/.test(msg)) return 'You do not have permission to make that change.';
   if (/unknown timezone/.test(msg)) return 'Unknown time zone.';
+  if (/member_pay_rates_member_no_overlap/.test(msg)) return 'That rate overlaps another rate for the same member. Choose a later start date.';
   if (/leave_requests_member_no_overlap/.test(msg)) return 'You already have leave requested for some of those dates.';
   // The leave functions raise plain-English messages meant for people; pass them through.
   if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);

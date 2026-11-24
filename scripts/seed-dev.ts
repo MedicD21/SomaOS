@@ -196,6 +196,13 @@ async function main(): Promise<void> {
         where m.tenant_id = ${tenantId} and m.user_id = ${memberId} and r.tenant_id = ${tenantId} and r.key = 'member'
           and not exists (select 1 from role_grants g where g.member_id = m.id and g.role_id = r.id)`;
       await tx`update profiles set active_tenant_id = ${tenantId} where user_id = ${memberId} and active_tenant_id is null`;
+      // Demo hourly rates so the pay preview shows dollars (only for members with no rate yet).
+      await tx`
+        insert into member_pay_rates (tenant_id, member_id, hourly_rate, effective, note)
+        select m.tenant_id, m.id, case when m.last_name = 'Medic' then 31.25 else 38.00 end, '[2026-01-01,)'::daterange, 'Demo rate'
+        from members m
+        where m.tenant_id = ${tenantId} and m.user_id is not null
+          and not exists (select 1 from member_pay_rates r where r.member_id = m.id)`;
       // Demo opening balances so leave can be tried straight away (only for members with no ledger yet).
       await tx`
         insert into leave_ledger (tenant_id, member_id, bank_id, kind, hours, effective_date, note)

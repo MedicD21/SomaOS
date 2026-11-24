@@ -93,6 +93,9 @@ importers:
       '@soma/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@soma/templates':
+        specifier: workspace:*
+        version: link:../../packages/templates
       '@tailwindcss/postcss':
         specifier: ^4.3.5
         version: 4.3.5

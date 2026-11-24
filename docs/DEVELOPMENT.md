@@ -207,3 +207,73 @@ in the demo department, and a few database tests expect a freshly seeded databas
    `minimum_password_length` in `supabase/config.toml`), then accepts the invitation at `/invites`.
 
 Local email (including these links) is in Mailpit at http://127.0.0.1:54324.
+
+## Pay (Phase 1c-1)
+
+Design: master design §7.2–7.3. Plan: `docs/superpowers/plans/2026-11-24-phase-1c-pay-engine.md`.
+
+**What it is:** a *preview* of hours and dollars by pay code for a pay period, calculated from **scheduled shifts and
+approved leave**. It is not a timesheet: actual time, after-the-fact holdovers, approval and payroll lock are the next
+slice (1c-2).
+
+### Concepts
+- **Pay code** — a named kind of pay (Regular, Overtime, Holdover, a leave type…), with a multiplier and an optional
+  **export code** for your payroll system. Leave pay codes use the **leave type's key** as their key; a multiplier of 0
+  means unpaid. Managed under **Admin → Pay**.
+- **Employee group** — members who share one set of pay rules. Members with no group use the group keyed `default`.
+- **Hourly rate** — effective-dated per member. Setting a new rate from a date ends the previous one the day before.
+  Rates are visible only to department-wide `pay.view` / `pay.manage` holders (not even to the member).
+- **Pay rules** — one versioned document per group (`config_versions`, kind `pay.rules`, key = group key): draft →
+  approve from a date, like shift patterns and leave policies. Approving needs `pay.manage` and `admin.config.manage`.
+  Rules in force on the **first day of the pay period** apply to the whole period.
+
+### How a period is calculated (`computePay` in `@soma/schedule-engine`)
+1. Shifts and counted leave are processed in date order within each **work period** (a block of N days aligned to an
+   anchor; it can be longer than the pay period).
+2. Hours worked above the work period's `threshold` are **federal overtime** at its `multiplier`. A shift that crosses the
+   threshold is split exactly (e.g. 20 h regular + 4 h overtime).
+3. Each shift type maps to a pay code and multiplier (`assignments`). For an hour that is both contract overtime and
+   above the threshold, `overtimeCombination` decides: `highest` (the larger multiplier applies once) or `stack`
+   (premiums add: 1.5 + 0.5 = 2.0).
+4. Leave counts toward the threshold only if its leave type has *counts as time worked*; it is always paid straight under
+   its own code.
+5. A callback shorter than `minimumHours` is topped up; the top-up is paid but is not time worked.
+6. `compTime`: with `always`, or `member_choice` when the member prefers it, overtime lines earn comp credit
+   (hours × `compTime.multiplier`) and **no cash**. A member's preference is the custom field `prefers_comp_time`
+   (yes/no) on their member record — create it under **Admin → Custom fields**. Comp credit is shown and exported;
+   **posting it to the leave ledger is part of 1c-2**.
+7. Each line's dollars are rounded to cents; a member with no rate gets blank amounts, not zero.
+
+```json
+{
+  "payPeriod": { "kind": "fixed_days", "days": 14, "anchor": "2026-01-01" },
+  "workPeriod": { "days": 28, "anchor": "2026-01-01", "threshold": 212, "multiplier": 1.5, "code": "ot" },
+  "overtimeCombination": "highest",
+  "assignments": {
+    "regular":  { "code": "reg",  "multiplier": 1 },
+    "overtime": { "code": "ot",   "multiplier": 1.5 },
+    "trade":    { "code": "reg",  "multiplier": 1 },
+    "holdover": { "code": "hold", "multiplier": 1.5 },
+    "callback": { "code": "call", "multiplier": 1.5, "minimumHours": 2 },
+    "acting":   { "code": "act",  "multiplier": 1 },
+    "training": { "code": "reg",  "multiplier": 1 },
+    "detail":   { "code": "reg",  "multiplier": 1, "countsTowardFlsa": false }
+  },
+  "compTime": { "mode": "never", "multiplier": 1.5, "bankKey": "comp_time" }
+}
+```
+**Every number above is a starter value**, including the 28-day / 212 h work period: verify them against your own work
+period election and agreement. Starter rules are created as drafts; nothing is calculated until you approve them.
+
+### Pages
+- **Pay → period** (`/pay`, `?start=YYYY-MM-DD`): per-member totals; *Show lines* lists every line with the reason for
+  each number. Members without approved rules are reported, never guessed.
+- **CSV** (`/pay/export`): one row per member and pay code with export codes and cents, plus a comp-credit row.
+  Free text that starts with `=`, `+`, `-` or `@` is prefixed with `'` so spreadsheets do not run it as a formula.
+- To see results, a viewer needs department-wide `pay.view` (or `pay.manage`) **and** the ability to read shifts and
+  leave (`scheduling.roster.view`, `leave.view`); the Payroll / HR role has all of these.
+
+### Not yet
+Actual-time timesheets, officer approval and payroll lock, posting comp time to the ledger, per-payroll-system file
+formats, salaried members, regular-rate adjustments for non-discretionary pay, and rates or rules that change in the
+middle of a pay period (they take effect at the start of the next one).

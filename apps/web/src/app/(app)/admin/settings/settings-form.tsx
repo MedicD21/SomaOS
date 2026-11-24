@@ -50,6 +50,9 @@ export function SettingsForm({
             <label className="flex items-center gap-2">
               <input type="checkbox" name="modules" value="leave" defaultChecked={enabledModules.includes('leave')} /> Leave
             </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="pay" defaultChecked={enabledModules.includes('pay')} /> Pay
+            </label>
           </fieldset>
           <Field id="reason" label="Reason for change (optional)">
             <Input id="reason" name="reason" />

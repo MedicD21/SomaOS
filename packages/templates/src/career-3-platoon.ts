@@ -1,5 +1,6 @@
 import { DEFAULT_ROLES } from './roles';
 import { CAREER_LEAVE } from './leave';
+import { careerPay } from './pay';
 import { DEFAULT_CREDENTIAL_TYPES } from './credential-types';
 import type { DepartmentTemplate } from './types';
 
@@ -29,9 +30,10 @@ export const career3Platoon: DepartmentTemplate = {
     { key: 'c', label: 'C Shift', color: '#16a34a' },
   ],
   roles: DEFAULT_ROLES,
-  enabledModules: ['admin', 'files', 'scheduling', 'leave'],
+  enabledModules: ['admin', 'files', 'scheduling', 'leave', 'pay'],
   credentialTypes: DEFAULT_CREDENTIAL_TYPES,
   leave: CAREER_LEAVE,
+  pay: careerPay(CAREER_LEAVE),
   schedulePattern: {
     key: 'default',
     payload: {

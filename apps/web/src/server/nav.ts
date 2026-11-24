@@ -10,13 +10,14 @@ export const NAV: NavItem[] = [
   { href: '/', label: 'Dashboard', module: 'core' },
   { href: '/schedule', label: 'My schedule', module: 'scheduling' },
   { href: '/roster', label: 'Roster', module: 'scheduling', anyOf: ['scheduling.roster.view'] },
+  { href: '/pay', label: 'Pay', module: 'pay', anyOf: ['pay.view', 'pay.manage'] },
   { href: '/leave', label: 'My leave', module: 'leave', anyOf: ['leave.request'] },
   { href: '/leave/approvals', label: 'Leave approvals', module: 'leave', anyOf: ['leave.approve'] },
   {
     href: '/admin',
     label: 'Admin',
     module: 'admin',
-    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage'],
+    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage', 'pay.manage'],
   },
 ];
 
@@ -34,6 +35,7 @@ export const ADMIN_NAV: (NavItem & { anyOf: Permission[] })[] = [
   { href: '/admin/scheduling/seats', label: 'Seats', module: 'scheduling', anyOf: ['scheduling.config.manage'] },
   { href: '/admin/scheduling/credential-types', label: 'Credential types', module: 'scheduling', anyOf: ['scheduling.config.manage'] },
   { href: '/admin/leave', label: 'Leave', module: 'leave', anyOf: ['leave.manage'] },
+  { href: '/admin/pay', label: 'Pay', module: 'pay', anyOf: ['pay.manage'] },
   { href: '/admin/audit', label: 'Audit log', module: 'admin', anyOf: ['admin.audit.view'] },
 ];
 
