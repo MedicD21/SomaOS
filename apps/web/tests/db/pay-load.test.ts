@@ -3,6 +3,7 @@ import { can as evaluate, toGrants, type MyGrantRow } from '@soma/auth';
 import { asUser, closeTestDb, withAdmin, type Tx } from '@soma/db/src/test-harness';
 import { TEMPLATES } from '@soma/templates';
 import { generateRoster } from '@/server/scheduling/generate';
+import { closePayPeriod, reopenPayPeriod } from '@/server/pay/close';
 import { loadPayPeriod } from '@/server/pay/load';
 import { approveRulesDraft, listRuleVersions, saveRulesDraft } from '@/server/pay/rules';
 
@@ -171,6 +172,94 @@ describe('pay rule versions', () => {
         ]);
         await expect(saveRulesDraft(tx, 'default', RULES).then((n) => approveRulesDraft(tx, 'default', n, '2026-07-01'))).rejects.toThrow(/after 2026-07-01/);
       });
+    });
+  });
+});
+
+describe('time entries and closing', () => {
+  const rileyRow = async (tx: Tx, d: Demo) => (await loadPayPeriod(tx, PERIOD)).rows.find((r) => r.memberId === d.rileyId)!;
+
+  it('adds recorded time as extra work and ignores voided entries', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      await approveRules(tx, d, LOW);
+      await generate(tx, d);
+      await asAdmin(tx, d, async () => {
+        const base = (await rileyRow(tx, d)).result!;
+        const [entry] = await tx<{ id: string }[]>`select app.add_time_entry(${d.rileyId}, '2026-01-10', 3, 'holdover', 'Held over for a late call') as id`;
+        const withHold = await rileyRow(tx, d);
+        expect(withHold.result!.totalHours).toBe(base.totalHours + 3);
+        const hold = withHold.result!.lines.find((l) => l.code === 'hold')!;
+        expect(hold).toMatchObject({ hours: 3, multiplier: 1.5, amount: 140.63 });
+        await tx`select app.void_time_entry(${entry!.id}, 'Entered on the wrong day')`;
+        expect((await rileyRow(tx, d)).result!.totalHours).toBe(base.totalHours);
+      });
+    });
+  });
+
+  it('counts time worked before the period toward the work-period threshold', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      // 28-day pay period inside a 56-day work period: the first half's hours already used up the threshold.
+      const rules = { ...LOW, payPeriod: { kind: 'fixed_days', days: 28, anchor: '2026-01-29' }, workPeriod: { ...LOW.workPeriod, days: 56, anchor: '2026-01-01', threshold: 100 } };
+      await approveRules(tx, d, rules);
+      await asAdmin(tx, d, async () => {
+        const period = { start: '2026-01-29', endExclusive: '2026-02-26' };
+        await tx`select app.add_time_entry(${d.rileyId}, '2026-01-05', 48, 'regular', 'Worked before the pay period')`;
+        await tx`select app.add_time_entry(${d.rileyId}, '2026-01-06', 48, 'regular', 'Worked before the pay period')`;
+        await tx`select app.add_time_entry(${d.rileyId}, '2026-01-07', 48, 'regular', 'Worked before the pay period')`;
+        await tx`select app.add_time_entry(${d.rileyId}, '2026-02-02', 10, 'regular', 'Worked inside the pay period')`;
+        const riley = (await loadPayPeriod(tx, period)).rows.find((r) => r.memberId === d.rileyId)!;
+        // 144 h earlier in the work period already passed 100 h, so these 10 h are all overtime.
+        expect(riley.result!.lines.find((l) => l.code === 'ot')!.hours).toBe(10);
+      });
+    });
+  });
+
+  it('a closed period keeps its numbers when rates, rules or the roster change, and reopening makes it live again', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      await approveRules(tx, d, LOW);
+      await generate(tx, d);
+      let closeId = '';
+      let frozen = 0;
+      await asAdmin(tx, d, async () => {
+        frozen = (await rileyRow(tx, d)).result!.totalAmount!;
+        closeId = (await closePayPeriod(tx, PERIOD)).id;
+        expect((await loadPayPeriod(tx, PERIOD)).closed).toMatchObject({ id: closeId });
+      });
+      await tx`update member_pay_rates set hourly_rate = 99 where member_id = ${d.rileyId}`;
+      await tx`update shift_assignments set status = 'cancelled' where member_id = ${d.rileyId}`;
+      await asAdmin(tx, d, async () => {
+        const closed = await loadPayPeriod(tx, PERIOD);
+        expect(closed.closed).not.toBeNull();
+        expect(closed.rows.find((r) => r.memberId === d.rileyId)!.result!.totalAmount).toBe(frozen);
+        await reopenPayPeriod(tx, closeId, 'Reopened to check a rate');
+        const live = await loadPayPeriod(tx, PERIOD);
+        expect(live.closed).toBeNull();
+        expect(live.rows.find((r) => r.memberId === d.rileyId)!.result!.totalHours).toBe(0);
+      });
+    });
+  });
+
+  it('refuses to close when a member could not be calculated, and credits comp time when it can', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      await generate(tx, d);
+      await asAdmin(tx, d, async () => {
+        await expect(closePayPeriod(tx, PERIOD)).rejects.toThrow(/Cannot close.*No approved pay rules/);
+        expect((await tx`select 1 from pay_period_closes`).length).toBe(0);
+      });
+      await approveRules(tx, d, { ...LOW, compTime: { mode: 'always', multiplier: 1.5, bankKey: 'comp_time' } });
+      const [before] = await tx<{ h: string | null }[]>`select sum(hours) as h from leave_ledger l join leave_banks b on b.id = l.bank_id where l.member_id = ${d.rileyId} and b.key = 'comp_time'`;
+      let credit = 0;
+      await asAdmin(tx, d, async () => {
+        const { credits } = await closePayPeriod(tx, PERIOD);
+        credit = credits.find((c) => c.memberId === d.rileyId)!.hours;
+        expect(credit).toBeGreaterThan(0);
+      });
+      const [after] = await tx<{ h: string | null }[]>`select sum(hours) as h from leave_ledger l join leave_banks b on b.id = l.bank_id where l.member_id = ${d.rileyId} and b.key = 'comp_time'`;
+      expect(Number(after!.h ?? 0) - Number(before!.h ?? 0)).toBe(credit);
     });
   });
 });
