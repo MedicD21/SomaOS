@@ -33,8 +33,8 @@ $$;
 revoke execute on function app.leave_shifts(uuid, date, date) from public, anon, authenticated;
 
 -- May the caller decide leave for this member? Needs a leave.approve grant covering the member's
--- current primary org unit (department scope, or an org-unit subtree) and, when the grant is
--- limited to a shift, the member's primary shift. Nobody decides their own leave.
+-- current org unit (primary assignment, else standing seat; department scope or an org-unit
+-- subtree) and, when the grant is limited to a shift, the member's shift. Nobody decides their own leave.
 create or replace function app.can_decide_leave(p_member uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select p_member is distinct from app.my_member_id()
@@ -42,12 +42,24 @@ language sql stable security definer set search_path = '' as $$
       select 1
       from app.my_grants() g
       left join lateral (
-        select a.shift_id, ou.path
-        from public.member_assignments a
-        join public.tenants t on t.id = a.tenant_id
-        left join public.org_units ou on ou.id = a.org_unit_id
-        where a.member_id = p_member and a.tenant_id = app.tenant_id() and a.is_primary
-          and a.effective @> (now() at time zone t.timezone)::date
+        -- Where the member works: their primary assignment, else their regular (standing) seat.
+        select x.shift_id, x.path from (
+          select 1 as pri, a.shift_id, ou.path
+          from public.member_assignments a
+          join public.tenants t on t.id = a.tenant_id
+          left join public.org_units ou on ou.id = a.org_unit_id
+          where a.member_id = p_member and a.tenant_id = app.tenant_id() and a.is_primary
+            and a.effective @> (now() at time zone t.timezone)::date
+          union all
+          select 2, ss.platoon_shift_id, ou.path
+          from public.standing_seats ss
+          join public.tenants t on t.id = ss.tenant_id
+          join public.seats st on st.id = ss.seat_id
+          left join public.org_units ou on ou.id = st.org_unit_id
+          where ss.member_id = p_member and ss.tenant_id = app.tenant_id()
+            and ss.effective @> (now() at time zone t.timezone)::date
+        ) x
+        order by x.pri
         limit 1
       ) pa on true
       where g.permission = 'leave.approve'

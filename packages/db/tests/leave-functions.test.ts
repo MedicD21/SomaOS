@@ -207,6 +207,26 @@ describe('decide_leave', () => {
     });
   });
 
+  it('uses the standing seat (station and platoon) when a member has no primary assignment', async () => {
+    await withAdmin(async (tx) => {
+      const w = await world(tx);
+      await approvePolicy(tx, w, 'vacation', { negativeAllowed: true });
+      const seated = await person(tx, w.t, { perms: ['leave.request'] });   // no member_assignments row
+      await tx`insert into standing_seats (tenant_id, member_id, seat_id, platoon_shift_id, effective)
+               values (${w.t}, ${seated.m}, ${w.seat1}, ${w.b}, '[2020-01-01,)')`;
+      await addShift(tx, w.t, seated.m, w.seat1, 70);
+      const id = await request(tx, w, seated, 70, 70);
+      const otherCaptain = await person(tx, w.t, { perms: ['leave.approve'], scope: { scopeKind: 'org_unit', orgUnitId: w.s2, shiftId: w.b } });
+      await asUser(tx, { sub: otherCaptain.u, tenant_id: w.t }, async () => {
+        await expectDbError(tx, /not in your scope/, () => tx`select app.decide_leave(${id}, true, null)`);
+      });
+      await asUser(tx, { sub: w.captain.u, tenant_id: w.t }, async () => {      // Station 1 / B shift
+        await tx`select app.decide_leave(${id}, true, null)`;
+      });
+      expect((await tx`select status from leave_requests where id = ${id}`)[0]!.status).toBe('approved');
+    });
+  });
+
   it('nobody approves their own request, and requesters cannot decide', async () => {
     await withAdmin(async (tx) => {
       const w = await world(tx);
