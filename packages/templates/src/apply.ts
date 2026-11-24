@@ -49,6 +49,23 @@ export async function applyTemplate(
              from tenants t where t.id = ${tenantId}
              on conflict (tenant_id, kind, key, version) do nothing`;
   }
+  for (const b of template.leave.banks) {
+    await tx`insert into leave_banks (tenant_id, key, label) values (${tenantId}, ${b.key}, ${b.label})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  for (const [i, lt] of template.leave.types.entries()) {
+    await tx`insert into leave_types (tenant_id, key, label, bank_id, requires_documentation, lead_time_days, counts_as_worked, sort)
+             select ${tenantId}, ${lt.key}, ${lt.label}, b.id, ${lt.requiresDocumentation}, ${lt.leadTimeDays}, ${lt.countsAsWorked}, ${i + 1}
+             from (select 1) x left join leave_banks b on b.tenant_id = ${tenantId} and b.key = ${lt.bankKey}
+             on conflict (tenant_id, key) do nothing`;
+  }
+  // Starter policies are DRAFTS: nothing accrues until an administrator edits and approves them.
+  for (const p of template.leave.policies) {
+    await tx`insert into config_versions (tenant_id, kind, key, version, status, effective, payload, change_note)
+             values (${tenantId}, 'leave.accrual', ${p.bankKey}, 1, 'draft', tstzrange(null, null),
+                     ${tx.json(p.payload as never)}, 'Starter values from the department template — review before approving')
+             on conflict (tenant_id, kind, key, version) do nothing`;
+  }
   await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
            where tenant_id = ${tenantId} and enabled_modules = '{}'`;
 

@@ -196,6 +196,15 @@ async function main(): Promise<void> {
         where m.tenant_id = ${tenantId} and m.user_id = ${memberId} and r.tenant_id = ${tenantId} and r.key = 'member'
           and not exists (select 1 from role_grants g where g.member_id = m.id and g.role_id = r.id)`;
       await tx`update profiles set active_tenant_id = ${tenantId} where user_id = ${memberId} and active_tenant_id is null`;
+      // Demo opening balances so leave can be tried straight away (only for members with no ledger yet).
+      await tx`
+        insert into leave_ledger (tenant_id, member_id, bank_id, kind, hours, effective_date, note)
+        select m.tenant_id, m.id, b.id, 'adjust', v.hours, current_date, 'Demo opening balance'
+        from members m
+        cross join (values ('vacation', 120::numeric), ('sick', 96::numeric)) v(key, hours)
+        join leave_banks b on b.tenant_id = m.tenant_id and b.key = v.key
+        where m.tenant_id = ${tenantId} and m.user_id is not null
+          and not exists (select 1 from leave_ledger l where l.member_id = m.id and l.bank_id = b.id)`;
       await seedRoster(tx, tenantId);
     });
     console.log('Seeded Demo Fire Rescue. Login: admin@soma.local / somadev123!');

@@ -70,4 +70,24 @@ describe('applyTemplate', () => {
       expect(n[0]).toEqual({ types: 6, patterns: 0 });
     });
   });
+
+  it('leave: creates banks, types and DRAFT policies, idempotently', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const u = await createTestUser(tx);
+      const admin = { userId: u, firstName: 'Lee', lastName: 'Chief' };
+      await applyTemplate(tx, t, TEMPLATES['career-3-platoon'], admin);
+      await applyTemplate(tx, t, TEMPLATES['career-3-platoon'], admin);
+      const [c] = await tx`
+        select (select count(*)::int from leave_banks where tenant_id = ${t}) as banks,
+               (select count(*)::int from leave_types where tenant_id = ${t}) as types,
+               (select count(*)::int from leave_types where tenant_id = ${t} and bank_id is null) as no_bank,
+               (select count(*)::int from config_versions where tenant_id = ${t} and kind = 'leave.accrual') as policies,
+               (select count(*)::int from config_versions where tenant_id = ${t} and kind = 'leave.accrual' and status <> 'draft') as not_draft`;
+      expect(c).toEqual({ banks: 4, types: 7, no_bank: 3, policies: 4, not_draft: 0 });
+      const [v] = await tx`select count(*)::int as n from leave_banks b where b.tenant_id = ${t} and exists
+        (select 1 from leave_types lt where lt.bank_id = b.id)`;
+      expect(v!.n).toBe(4);
+    });
+  });
 });
