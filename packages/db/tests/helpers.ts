@@ -126,3 +126,9 @@ export async function addCredential(
     values (${tenantId}, ${memberId}, ${typeId}, '2025-01-01', ${expiresOn}) returning id`;
   return r[0]!.id;
 }
+
+export async function createSeat(tx: Tx, tenantId: string, orgUnitId: string, label = 'Engine 1 Officer'): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into seats (tenant_id, org_unit_id, label) values (${tenantId}, ${orgUnitId}, ${label}) returning id`;
+  return r[0]!.id;
+}
