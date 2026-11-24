@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@soma/config-core": "workspace:*",
     "temporal-polyfill": "^1.0.8"
   }
 }
