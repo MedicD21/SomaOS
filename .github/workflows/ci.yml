@@ -31,6 +31,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:start
       - run: pnpm env:local
+      # Some web DB tests need the seeded demo department (supabase start only applies migrations).
+      - run: pnpm db:seed
       - run: pnpm test:db
 
   e2e:
