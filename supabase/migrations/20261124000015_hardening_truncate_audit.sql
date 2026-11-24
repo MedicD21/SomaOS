@@ -67,15 +67,21 @@ begin
     if auth.uid() is not null then
       new.created_by := auth.uid();
     end if;
-  else
+  elsif auth.uid() is not null then
+    -- Provenance is frozen for end users only; service/superuser contexts (auth.uid() null),
+    -- e.g. regeneration or data repair, may still correct these columns.
     new.created_by := old.created_by;
     new.source := old.source;
     new.pattern_version := old.pattern_version;
   end if;
 
+  -- An override must be (re)approved when it is set, changed, or the overridden assignment
+  -- moves to a different member, seat or time. Status-only changes (cancel) need roster.edit only.
   if auth.uid() is not null
      and new.override_reason is not null
-     and (tg_op = 'INSERT' or new.override_reason is distinct from old.override_reason)
+     and (tg_op = 'INSERT'
+          or new.override_reason is distinct from old.override_reason
+          or (new.member_id, new.seat_id, new.during) is distinct from (old.member_id, old.seat_id, old.during))
      and not app.can_write_assignment('scheduling.qualification.override', new.seat_id) then
     raise exception 'qualification override requires permission';
   end if;

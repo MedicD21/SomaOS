@@ -347,8 +347,33 @@ describe('shift_assignments override and attribution guards', () => {
           set source = 'manual', pattern_version = 99, created_by = ${other}
           where id = ${f.id} returning source, pattern_version, created_by`;
         expect(upd).toMatchObject({ source: 'generated', pattern_version: null });
-        expect(upd!.created_by).not.toBe(other);
+        expect(upd!.created_by).toBeNull();
       });
+    });
+  });
+
+  it('re-checks the override when an overridden row moves to another member, seat or time', async () => {
+    await withAdmin(async (tx) => {
+      const f = await fixture(tx);
+      const m2 = await createMember(tx, f.t);
+      const seat2 = await createSeat(tx, f.t, f.unit, 'Medic 1');
+      await asUser(tx, { sub: f.editor.u, tenant_id: f.t }, async () => {
+        await expectDbError(tx, /qualification override requires permission/, () =>
+          tx`update shift_assignments set member_id = ${m2} where id = ${f.id}`);
+        await expectDbError(tx, /qualification override requires permission/, () =>
+          tx`update shift_assignments set during = ${DAY2}::tstzrange where id = ${f.id}`);
+        await expectDbError(tx, /qualification override requires permission/, () =>
+          tx`update shift_assignments set seat_id = ${seat2} where id = ${f.id}`);
+      });
+    });
+  });
+
+  it('lets service/superuser contexts correct provenance columns', async () => {
+    await withAdmin(async (tx) => {
+      const f = await fixture(tx);
+      const [upd] = await tx`update shift_assignments set source = 'manual', pattern_version = 3
+        where id = ${f.id} returning source, pattern_version`;
+      expect(upd).toMatchObject({ source: 'manual', pattern_version: 3 });
     });
   });
 });
