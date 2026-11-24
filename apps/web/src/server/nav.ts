@@ -16,7 +16,7 @@ export const NAV: NavItem[] = [
     href: '/admin',
     label: 'Admin',
     module: 'admin',
-    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage'],
+    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage'],
   },
 ];
 
@@ -33,6 +33,7 @@ export const ADMIN_NAV: (NavItem & { anyOf: Permission[] })[] = [
   { href: '/admin/scheduling/patterns', label: 'Shift patterns', module: 'scheduling', anyOf: ['scheduling.config.manage'] },
   { href: '/admin/scheduling/seats', label: 'Seats', module: 'scheduling', anyOf: ['scheduling.config.manage'] },
   { href: '/admin/scheduling/credential-types', label: 'Credential types', module: 'scheduling', anyOf: ['scheduling.config.manage'] },
+  { href: '/admin/leave', label: 'Leave', module: 'leave', anyOf: ['leave.manage'] },
   { href: '/admin/audit', label: 'Audit log', module: 'admin', anyOf: ['admin.audit.view'] },
 ];
 
