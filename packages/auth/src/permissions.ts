@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   'leave.approve': { label: 'Approve or deny leave requests', module: 'leave' },
   'leave.view': { label: 'View leave balances and requests', module: 'leave', sensitive: 'HR' },
   'leave.manage': { label: 'Manage leave banks, policies and balances', module: 'leave', sensitive: 'HR' },
+  'pay.view': { label: 'View pay rates and pay period results', module: 'pay', sensitive: 'HR' },
+  'pay.manage': { label: 'Manage pay codes, rates and pay rules', module: 'pay', sensitive: 'HR' },
   'notifications.send': { label: 'Send notifications', module: 'notifications' },
 } as const satisfies Record<string, PermissionInfo>;
 
