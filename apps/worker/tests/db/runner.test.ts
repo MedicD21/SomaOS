@@ -31,6 +31,15 @@ describe('runOnce', () => {
     expect(job).toMatchObject({ status: 'failed', attempts: 5 });
   });
 
+  it('reclaims jobs stuck in running after a crash', async () => {
+    await sql`insert into jobs (kind, payload, status, locked_at) values
+              ('echo', '{"n":"stale"}', 'running', now() - interval '11 minutes'),
+              ('echo', '{"n":"fresh"}', 'running', now() - interval '1 minute')`;
+    const seen: unknown[] = [];
+    expect(await runOnce(sql, { echo: async (p) => void seen.push(p) })).toBe(1);
+    expect(seen).toEqual([{ n: 'stale' }]);
+  });
+
   it('fails jobs with no handler instead of looping', async () => {
     await sql`insert into jobs (kind, payload) values ('mystery', '{}')`;
     await runOnce(sql, {});

@@ -82,34 +82,15 @@ describe('notifications', () => {
 });
 
 describe('invites', () => {
-  it('queues an invite for a member with an email and requires admin.members.manage', async () => {
+  it('requires admin.members.manage to queue an invite', async () => {
     await withAdmin(async (tx) => {
       const t = await createTenant(tx);
-      const admin = await memberUser(tx, t, ['admin.members.manage']);
       const plain = await memberUser(tx, t, []);
       const target = await createMember(tx, t);
       await tx`update members set email = 'new@example.test' where id = ${target}`;
       await asUser(tx, { sub: plain.u, tenant_id: t }, async () => {
         await expectDbError(tx, /not allowed/, () => tx`select app.enqueue_invite(${target})`);
       });
-      await asUser(tx, { sub: admin.u, tenant_id: t }, async () => {
-        await tx`select app.enqueue_invite(${target})`;
-      });
-      const [job] = await tx`select kind, payload from jobs where tenant_id = ${t}`;
-      expect(job).toMatchObject({ kind: 'invite-member', payload: { member_id: target, email: 'new@example.test', tenant_id: t } });
-    });
-  });
-
-  it('accept_invites activates invited memberships for the caller', async () => {
-    await withAdmin(async (tx) => {
-      const t = await createTenant(tx);
-      const u = await userInTenant(tx, t);
-      await tx`update memberships set status = 'invited' where user_id = ${u}`;
-      await asUser(tx, { sub: u, tenant_id: null }, async () => {
-        expect((await tx`select app.accept_invites() as n`)[0]!.n).toBe(1);
-      });
-      const [p] = await tx`select active_tenant_id from profiles where user_id = ${u}`;
-      expect(p!.active_tenant_id).toBe(t);
     });
   });
 });

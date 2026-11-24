@@ -40,6 +40,7 @@ export async function asUser<T>(tx: Tx, claims: TestClaims, fn: () => Promise<T>
     return await fn();
   } finally {
     await tx`reset role`;
+    await tx`select set_config('request.jwt.claims', '', true)`;
   }
 }
 

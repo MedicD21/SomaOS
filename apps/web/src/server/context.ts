@@ -44,7 +44,7 @@ export const getClaims = cache(async (): Promise<DbClaims | null> => {
 export const getRequestContext = cache(async (): Promise<RequestContext> => {
   const claims = await getClaims();
   if (!claims) redirect('/login');
-  if (!claims.tenant_id) redirect('/auth/accept');
+  if (!claims.tenant_id) redirect('/invites');
 
   const data = await withUserDb(claims, async (tx) => {
     const [tenant] = await tx<{ id: string; name: string; timezone: string; terminology: Record<string, string>; enabled_modules: string[] }[]>`
@@ -58,7 +58,7 @@ export const getRequestContext = cache(async (): Promise<RequestContext> => {
     const [unread] = await tx<{ n: number }[]>`select count(*)::int as n from notifications where read_at is null`;
     return { tenant, grantRows, memberId: me?.id ?? null, memberships: [...memberships], unread: unread?.n ?? 0 };
   });
-  if (!data.tenant) redirect('/no-department');
+  if (!data.tenant) redirect('/invites');
 
   const grants = toGrants(data.grantRows);
   const aal = claims.aal === 'aal2' ? 'aal2' : 'aal1';

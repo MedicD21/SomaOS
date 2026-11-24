@@ -1,34 +1,42 @@
 import type postgres from 'postgres';
 import { z } from 'zod';
+import type { Mailer } from '../mailer';
+import { FROM } from '../mailer';
 
 /** The slice of Supabase's admin auth API the invite job needs (injectable for tests). */
 export interface AuthAdmin {
   inviteUserByEmail(email: string, redirectTo: string): Promise<{ userId: string } | { error: string }>;
 }
 
-const payloadSchema = z.object({ tenant_id: z.uuid(), member_id: z.uuid(), email: z.email() });
+const payloadSchema = z.object({
+  invite_id: z.uuid(),
+  tenant_id: z.uuid(),
+  tenant_name: z.string(),
+  email: z.email(),
+});
 
 /**
- * Sends a Supabase Auth invitation, links the member record to the auth user, and adds an
- * `invited` membership (activated by app.accept_invites() on first sign-in). If the email
- * already has an account, it is linked without sending a new invitation.
+ * Delivers a member invitation. It never links accounts or creates memberships: the
+ * invitee must sign in with the verified invited email and accept it themselves
+ * (app.accept_invite). New emails get a Supabase invitation (account setup link);
+ * existing accounts get a notice to sign in and accept.
  */
 export async function inviteMember(
   payload: unknown,
-  deps: { sql: postgres.Sql; auth: AuthAdmin; redirectTo: string },
+  deps: { sql: postgres.Sql; auth: AuthAdmin; mailer: Mailer; appUrl: string },
 ): Promise<void> {
   const p = payloadSchema.parse(payload);
-  const { sql } = deps;
-  const existing = await sql<{ id: string }[]>`select id from auth.users where lower(email) = lower(${p.email}) and email_confirmed_at is not null`;
-  let userId = existing[0]?.id;
-  if (!userId) {
-    const r = await deps.auth.inviteUserByEmail(p.email, deps.redirectTo);
+  const acceptUrl = `${deps.appUrl}/invites`;
+  const existing = await deps.sql<{ id: string }[]>`select id from auth.users where lower(email) = lower(${p.email})`;
+  if (existing.length === 0) {
+    const r = await deps.auth.inviteUserByEmail(p.email, acceptUrl);
     if ('error' in r) throw new Error(`invite failed: ${r.error}`);
-    userId = r.userId;
+    return;
   }
-  await sql.begin(async (tx) => {
-    await tx`insert into memberships (tenant_id, user_id, status) values (${p.tenant_id}, ${userId}, 'invited')
-             on conflict (tenant_id, user_id) do nothing`;
-    await tx`update members set user_id = ${userId} where id = ${p.member_id} and tenant_id = ${p.tenant_id} and user_id is null`;
+  await deps.mailer.send({
+    from: FROM,
+    to: p.email,
+    subject: `You have been invited to ${p.tenant_name} on SomaOS`,
+    text: `${p.tenant_name} invited you to join their department on SomaOS.\n\nSign in and accept the invitation at:\n${acceptUrl}\n\nIf you did not expect this, you can ignore this email.`,
   });
 }

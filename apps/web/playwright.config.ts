@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+try {
+  process.loadEnvFile('.env.local');
+} catch {
+  // CI writes .env.local via `pnpm env:local`; absent locally until then.
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,

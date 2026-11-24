@@ -40,7 +40,15 @@ Local email: Mailpit at http://127.0.0.1:54324.
 - App-level permission checks (`requirePermission`, `check`) run first; RLS is the backstop. Writes to admin tables also
   require the matching `admin.*` permission inside RLS (`app.has_permission`).
 - Only `apps/worker` and test harnesses use the service role.
-- **Production:** `SOMA_DB_URL` must be a login role that is a member of `authenticated`, not a superuser.
+- The tenant claim counts only while the user has an **active** membership in an **active** department
+  (`app.tenant_id()` re-checks on every statement), so suspending a member cuts access immediately.
+- Database-side admin checks require **department-wide** grants (`app.has_permission_dept`), and nobody can grant a
+  permission they do not hold themselves.
+- Accounts are **invite-only** (`enable_signup = false`). An invitation is accepted explicitly by the owner of the
+  verified invited email on `/invites` (`app.accept_invite`); nothing is linked automatically.
+- **Production:** `SOMA_DB_URL` (web) must be a login role that is a member of `authenticated`, not a superuser, and a
+  direct/session connection (postgres-js prepares statements; the transaction pooler on port 6543 needs `prepare: false`).
+  The worker needs a privileged role (it reads `auth.users` and processes `jobs`).
 
 ## Adding a tenant-owned table (checklist)
 1. Migration in `supabase/migrations/<timestamp>_<name>.sql`:

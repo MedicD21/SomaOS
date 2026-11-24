@@ -4,13 +4,17 @@ export type Handler = (payload: unknown) => Promise<void>;
 export type Handlers = Record<string, Handler>;
 
 export const MAX_ATTEMPTS = 5;
+/** A job still `running` after this long is assumed to belong to a crashed worker. */
+export const STALE_LOCK = '10 minutes';
 
 type Job = { id: number; kind: string; payload: unknown; attempts: number };
 
 async function claimNext(sql: postgres.Sql): Promise<Job | null> {
   const rows = await sql<Job[]>`
-    update jobs set status = 'running', attempts = attempts + 1
-    where id = (select id from jobs where status = 'pending' and run_after <= now()
+    update jobs set status = 'running', attempts = attempts + 1, locked_at = now()
+    where id = (select id from jobs
+                where (status = 'pending' and run_after <= now())
+                   or (status = 'running' and locked_at < now() - ${STALE_LOCK}::interval)
                 order by id for update skip locked limit 1)
     returning id, kind, payload, attempts`;
   return rows[0] ?? null;

@@ -24,7 +24,7 @@ const auth: AuthAdmin = {
 const mailer = createSmtpMailer(env('SMTP_URL'));
 const handlers: Handlers = {
   'send-email': (p) => sendEmail(p, mailer),
-  'invite-member': (p) => inviteMember(p, { sql, auth, redirectTo: `${process.env.APP_URL ?? 'http://localhost:3000'}/login` }),
+  'invite-member': (p) => inviteMember(p, { sql, auth, mailer, appUrl: process.env.APP_URL ?? 'http://localhost:3000' }),
 };
 
 if (process.argv.includes('--once')) {
