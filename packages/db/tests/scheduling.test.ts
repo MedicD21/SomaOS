@@ -220,7 +220,7 @@ describe('shift_assignments permissions', () => {
       const editor = await actor(tx, t, ['scheduling.roster.edit']);
       const boss = await actor(tx, t, ['scheduling.roster.edit', 'scheduling.qualification.override']);
       await asUser(tx, { sub: editor.u, tenant_id: t }, async () => {
-        await expectDbError(tx, /row-level security/, () =>
+        await expectDbError(tx, /qualification override requires permission/, () =>
           assign(tx, t, m, DAY1, { seatId: seat, overrideReason: 'short staffed' }));
       });
       await asUser(tx, { sub: boss.u, tenant_id: t }, async () => {
@@ -281,6 +281,74 @@ describe('shift_assignments permissions', () => {
       const audited = await tx`select distinct table_name from audit_log
         where tenant_id = ${t} and table_name in ('seats','shift_assignments') order by 1`;
       expect(audited.map((r) => r.table_name)).toEqual(['seats', 'shift_assignments']);
+    });
+  });
+});
+
+describe('seat_requirements audit', () => {
+  it('records seat_id as the audit record_id', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const unit = await createOrgUnit(tx, t);
+      const seat = await createSeat(tx, t, unit);
+      const type = await createCredentialType(tx, t, 'emt');
+      await tx`insert into seat_requirements (tenant_id, seat_id, group_no, credential_type_id) values (${t}, ${seat}, 0, ${type})`;
+      const rows = await tx`select record_id from audit_log where tenant_id = ${t} and table_name = 'seat_requirements'`;
+      expect(rows.map((r) => r.record_id)).toEqual([seat]);
+    });
+  });
+});
+
+describe('shift_assignments override and attribution guards', () => {
+  async function fixture(tx: Tx) {
+    const t = await createTenant(tx);
+    const unit = await createOrgUnit(tx, t);
+    const seat = await createSeat(tx, t, unit);
+    const m = await createMember(tx, t);
+    const editor = await actor(tx, t, ['scheduling.roster.edit']);
+    const [row] = await assign(tx, t, m, DAY1, { seatId: seat, overrideReason: 'short staffed', source: 'generated' });
+    return { t, unit, seat, m, editor, id: row!.id as string };
+  }
+
+  it('lets a roster editor cancel an overridden row', async () => {
+    await withAdmin(async (tx) => {
+      const f = await fixture(tx);
+      await asUser(tx, { sub: f.editor.u, tenant_id: f.t }, async () => {
+        const upd = await tx`update shift_assignments set status = 'cancelled', cancelled_reason = 'sick'
+          where id = ${f.id} returning id`;
+        expect(upd).toHaveLength(1);
+      });
+    });
+  });
+
+  it('stops a roster editor from setting or changing override_reason', async () => {
+    await withAdmin(async (tx) => {
+      const f = await fixture(tx);
+      const m2 = await createMember(tx, f.t);
+      await asUser(tx, { sub: f.editor.u, tenant_id: f.t }, async () => {
+        await expectDbError(tx, /qualification override requires permission/, () =>
+          tx`update shift_assignments set override_reason = 'other reason' where id = ${f.id}`);
+        await expectDbError(tx, /qualification override requires permission/, () =>
+          assign(tx, f.t, m2, DAY2, { seatId: f.seat, overrideReason: 'short staffed' }));
+      });
+    });
+  });
+
+  it('forces created_by on insert and freezes created_by/source/pattern_version on update', async () => {
+    await withAdmin(async (tx) => {
+      const f = await fixture(tx);
+      const other = await userInTenant(tx, f.t);
+      await asUser(tx, { sub: f.editor.u, tenant_id: f.t }, async () => {
+        const [ins] = await tx`insert into shift_assignments (tenant_id, member_id, seat_id, during, type, source, created_by)
+          values (${f.t}, ${f.editor.m}, ${f.seat}, ${DAY2}::tstzrange, 'regular', 'manual', ${other})
+          returning created_by`;
+        expect(ins!.created_by).toBe(f.editor.u);
+        const [upd] = await tx`update shift_assignments
+          set source = 'manual', pattern_version = 99, created_by = ${other}
+          where id = ${f.id} returning source, pattern_version, created_by`;
+        expect(upd).toMatchObject({ source: 'generated', pattern_version: null });
+        expect(upd!.created_by).not.toBe(other);
+      });
     });
   });
 });
