@@ -34,6 +34,9 @@ test('request, approve within scope, balance and roster effects, cancel, shortfa
   const month = targetMonth();
   const [t] = await sql<{ id: string }[]>`select id from tenants where slug = 'demo-fire-rescue'`;
   const tenantId = t!.id;
+  // An earlier spec may have switched this member into the second department.
+  await sql`update profiles set active_tenant_id = ${tenantId}
+            where user_id = (select id from auth.users where email = 'member@soma.local')`;
 
   // 1. An admin generates the month's roster.
   await loginAdmin(page);
