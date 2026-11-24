@@ -12,6 +12,9 @@ export type ActionResult = { ok: boolean | null; message: string | null; fieldEr
 export const IDLE: ActionResult = { ok: null, message: null };
 
 /** Maps database errors to messages a department admin can act on. */
+const LEAVE_MESSAGES =
+  /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero)/i;
+
 export function friendlyDbError(e: unknown): string {
   if (e instanceof ActionError) return e.message;
   const msg = e instanceof Error ? e.message : String(e);
@@ -24,6 +27,9 @@ export function friendlyDbError(e: unknown): string {
   if (/standing_seats_member_no_overlap/.test(msg)) return 'That member already has a regular seat for those dates.';
   if (/row-level security|permission denied/.test(msg)) return 'You do not have permission to make that change.';
   if (/unknown timezone/.test(msg)) return 'Unknown time zone.';
+  if (/leave_requests_member_no_overlap/.test(msg)) return 'You already have leave requested for some of those dates.';
+  // The leave functions raise plain-English messages meant for people; pass them through.
+  if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';
   console.error(e);
   return 'Something went wrong saving your change.';

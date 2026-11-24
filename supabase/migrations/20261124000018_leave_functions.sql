@@ -113,7 +113,7 @@ begin
     from public.leave_requests r join public.leave_types lt on lt.id = r.leave_type_id
     where r.member_id = v_member and r.status = 'pending' and lt.bank_id = v_type.bank_id;
     if v_hours > v_balance - v_pending then
-      raise exception 'insufficient balance: % h available, % h needed', round(v_balance - v_pending, 2), v_hours;
+      raise exception 'insufficient balance: % h available, % h needed', trim_scale(round(v_balance - v_pending, 2)), trim_scale(v_hours);
     end if;
   end if;
 
@@ -163,7 +163,7 @@ begin
     select coalesce(sum(hours), 0) into v_balance from public.leave_ledger
     where member_id = v_req.member_id and bank_id = v_type.bank_id;
     if v_hours > v_balance then
-      raise exception 'insufficient balance: % h available, % h needed', round(v_balance, 2), v_hours;
+      raise exception 'insufficient balance: % h available, % h needed', trim_scale(round(v_balance, 2)), trim_scale(v_hours);
     end if;
   end if;
 

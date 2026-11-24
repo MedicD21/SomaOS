@@ -10,6 +10,8 @@ export const NAV: NavItem[] = [
   { href: '/', label: 'Dashboard', module: 'core' },
   { href: '/schedule', label: 'My schedule', module: 'scheduling' },
   { href: '/roster', label: 'Roster', module: 'scheduling', anyOf: ['scheduling.roster.view'] },
+  { href: '/leave', label: 'My leave', module: 'leave', anyOf: ['leave.request'] },
+  { href: '/leave/approvals', label: 'Leave approvals', module: 'leave', anyOf: ['leave.approve'] },
   {
     href: '/admin',
     label: 'Admin',
