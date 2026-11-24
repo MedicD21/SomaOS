@@ -24,7 +24,7 @@ describe('inviteMember', () => {
     const auth: AuthAdmin = { inviteUserByEmail: async (e, r) => (calls.push([e, r]), { userId: crypto.randomUUID() }) };
     const mailer = new FakeMailer();
     await inviteMember(payload(email), { sql, auth, mailer, appUrl: 'http://localhost:3000' });
-    expect(calls).toEqual([[email, 'http://localhost:3000/invites']]);
+    expect(calls).toEqual([[email, 'http://localhost:3000/auth/welcome']]);
     expect(mailer.sent).toEqual([]);
   });
 
