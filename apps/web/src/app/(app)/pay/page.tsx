@@ -3,7 +3,9 @@ import { addDays, localDateOf } from '@soma/schedule-engine';
 import { Forbidden } from '@/components/forbidden';
 import { Card } from '@/components/ui/card';
 import { check, getRequestContext, withCtxDb } from '@/server/context';
+import { compCredits } from '@/server/pay/close';
 import { loadPayPeriod, payPeriodFor } from '@/server/pay/load';
+import { ClosePeriodForm, ReopenPeriodForm } from './close-forms';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const usd = (n: number | null) => (n === null ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n));
@@ -43,6 +45,9 @@ export default async function PayPage({ searchParams }: { searchParams: Promise<
     );
   }
   const { result, prev, next } = data;
+  const canManage = check(ctx, 'pay.manage').allowed;
+  const credits = compCredits(result.rows);
+  const unresolved = result.rows.filter((r) => r.problem).length;
   const last = addDays(result.period.endExclusive, -1);
   const totalHours = result.rows.reduce((s, r) => s + (r.result?.totalHours ?? 0), 0);
   const totalAmount = result.rows.every((r) => r.result === null || r.result.totalAmount !== null)
@@ -59,9 +64,36 @@ export default async function PayPage({ searchParams }: { searchParams: Promise<
         <a href={`/pay/export?start=${result.period.start}`} className="inline-flex min-h-11 items-center rounded-md border border-line px-3 text-sm">Download CSV</a>
       </div>
       <p className="text-sm text-muted">
-        {result.rows.length} members · {hrs(totalHours)} · {usd(totalAmount)} total. This is a preview from scheduled shifts and approved leave;
-        it is not a timesheet.
+        {result.rows.length} members · {hrs(totalHours)} · {usd(totalAmount)} total.{' '}
+        {result.closed
+          ? 'These numbers are frozen as they were when the period was closed.'
+          : 'This is a calculation from scheduled shifts, recorded time and approved leave; it is not final until payroll closes the period.'}
       </p>
+
+      {result.closed ? (
+        <Card title="Closed">
+          <p role="status">
+            Closed {day(result.closed.closedAt.slice(0, 10))}{result.closed.closedBy ? ` by ${result.closed.closedBy}` : ''}. Time cannot be added or voided
+            for these dates, and later changes to rates, rules or the roster do not change these numbers.
+          </p>
+          {canManage && <div className="mt-4"><ReopenPeriodForm id={result.closed.id} /></div>}
+        </Card>
+      ) : (
+        canManage && (
+          <Card title="Close this pay period">
+            <p className="mb-3 text-sm text-muted">
+              Closing freezes these numbers and locks the dates against changes. {credits.length
+                ? `It will credit comp time: ${credits.map((c) => `${c.name} ${hrs(c.hours)}`).join(', ')}.`
+                : 'No comp time will be credited.'}
+            </p>
+            {unresolved > 0 ? (
+              <p className="text-sm text-danger">{unresolved} member{unresolved === 1 ? '' : 's'} could not be calculated (see below). Fix that before closing.</p>
+            ) : (
+              <ClosePeriodForm start={result.period.start} />
+            )}
+          </Card>
+        )
+      )}
 
       <ul aria-label="Pay by member" className="space-y-3">
         {result.rows.map((m) => (

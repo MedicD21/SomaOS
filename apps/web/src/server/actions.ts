@@ -2,7 +2,7 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import type { Permission } from '@soma/auth';
 import type { RequestContext } from './context';
-import { check, getRequestContext, withCtxDb } from './context';
+import { check, getRequestContext, hasAny, withCtxDb } from './context';
 import type { Tx } from './db';
 import { ActionError } from './errors';
 
@@ -14,6 +14,9 @@ export const IDLE: ActionResult = { ok: null, message: null };
 /** Maps database errors to messages a department admin can act on. */
 const LEAVE_MESSAGES =
   /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero)/i;
+
+const TIME_MESSAGES =
+  /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period)/i;
 
 export function friendlyDbError(e: unknown): string {
   if (e instanceof ActionError) return e.message;
@@ -30,6 +33,7 @@ export function friendlyDbError(e: unknown): string {
   if (/member_pay_rates_member_no_overlap/.test(msg)) return 'That rate overlaps another rate for the same member. Choose a later start date.';
   if (/leave_requests_member_no_overlap/.test(msg)) return 'You already have leave requested for some of those dates.';
   // The leave functions raise plain-English messages meant for people; pass them through.
+  if (TIME_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';
   console.error(e);
@@ -54,6 +58,25 @@ export async function runAdmin(
       if (typeof reason === 'string' && reason.trim()) await tx`select set_config('app.reason', ${reason.trim()}, true)`;
       return fn(tx, ctx);
     });
+    revalidatePath('/', 'layout');
+    return { ok: true, message };
+  } catch (e) {
+    return { ok: false, message: friendlyDbError(e) };
+  }
+}
+
+/**
+ * Like runAdmin, but the caller needs any one of several permissions in any scope; the database
+ * functions decide whether the specific member or date is within the caller's scope.
+ */
+export async function runScoped(
+  permissions: Permission[],
+  fn: (tx: Tx, ctx: RequestContext) => Promise<string>,
+): Promise<ActionResult> {
+  const ctx = await getRequestContext();
+  if (!permissions.some((p) => hasAny(ctx, p))) return { ok: false, message: 'Not allowed.' };
+  try {
+    const message = await withCtxDb(ctx, (tx) => fn(tx, ctx));
     revalidatePath('/', 'layout');
     return { ok: true, message };
   } catch (e) {
