@@ -14,6 +14,8 @@
     "postgres": "^4.1.1"
   },
   "devDependencies": {
-    "@types/node": "^26.6.6"
+    "@types/node": "^26.6.6",
+    "@soma/templates": "workspace:*",
+    "@soma/auth": "workspace:*"
   }
 }

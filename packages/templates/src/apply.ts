@@ -1,0 +1,54 @@
+import type postgres from 'postgres';
+import type { DepartmentTemplate } from './types';
+
+export type FirstAdmin = { userId: string; firstName: string; lastName: string };
+
+/**
+ * Seeds a tenant from a template. Idempotent: re-running adds anything missing and
+ * changes nothing that already exists. Must run with a privileged connection
+ * (service role / platform onboarding).
+ */
+export async function applyTemplate(
+  tx: postgres.TransactionSql,
+  tenantId: string,
+  template: DepartmentTemplate,
+  firstAdmin: FirstAdmin,
+): Promise<void> {
+  for (const t of template.orgUnitTypes) {
+    await tx`insert into org_unit_types (tenant_id, key, label, sort)
+             values (${tenantId}, ${t.key}, ${t.label}, ${t.sort}) on conflict (tenant_id, key) do nothing`;
+  }
+  for (const r of template.ranks) {
+    await tx`insert into ranks (tenant_id, key, label, sort)
+             values (${tenantId}, ${r.key}, ${r.label}, ${r.sort}) on conflict (tenant_id, key) do nothing`;
+  }
+  for (const [i, s] of template.shifts.entries()) {
+    await tx`insert into shifts (tenant_id, key, label, color, sort)
+             values (${tenantId}, ${s.key}, ${s.label}, ${s.color}, ${i + 1}) on conflict (tenant_id, key) do nothing`;
+  }
+  for (const role of template.roles) {
+    const [row] = await tx<{ id: string }[]>`
+      insert into roles (tenant_id, key, label, is_system) values (${tenantId}, ${role.key}, ${role.label}, true)
+      on conflict (tenant_id, key) do update set key = excluded.key returning id`;
+    for (const p of role.permissions) {
+      await tx`insert into role_permissions (tenant_id, role_id, permission)
+               values (${tenantId}, ${row!.id}, ${p}) on conflict do nothing`;
+    }
+  }
+  await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
+           where tenant_id = ${tenantId} and enabled_modules = '{}'`;
+
+  await tx`insert into memberships (tenant_id, user_id, status) values (${tenantId}, ${firstAdmin.userId}, 'active')
+           on conflict (tenant_id, user_id) do update set status = 'active'`;
+  const [member] = await tx<{ id: string }[]>`
+    insert into members (tenant_id, user_id, first_name, last_name, employment_type)
+    values (${tenantId}, ${firstAdmin.userId}, ${firstAdmin.firstName}, ${firstAdmin.lastName}, 'career_full_time')
+    on conflict (tenant_id, user_id) where user_id is not null do update set user_id = excluded.user_id
+    returning id`;
+  await tx`
+    insert into role_grants (tenant_id, member_id, role_id, scope_kind, reason)
+    select ${tenantId}, ${member!.id}, r.id, 'department', 'initial department admin'
+    from roles r where r.tenant_id = ${tenantId} and r.key = 'dept_admin'
+      and not exists (select 1 from role_grants g where g.member_id = ${member!.id} and g.role_id = r.id)`;
+  await tx`update profiles set active_tenant_id = ${tenantId} where user_id = ${firstAdmin.userId} and active_tenant_id is null`;
+}

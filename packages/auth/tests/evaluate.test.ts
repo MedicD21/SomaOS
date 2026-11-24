@@ -67,3 +67,24 @@ describe('can', () => {
     expect(can([grant({})], ME, 'admin.roles.manage', {}, NOW).allowed).toBe(false);
   });
 });
+
+describe('toGrants', () => {
+  it('maps app.my_grants() rows and drops unknown permissions', async () => {
+    const { toGrants } = await import('../src/evaluate');
+    const grants = toGrants([
+      {
+        permission: 'admin.roles.manage',
+        scope_kind: 'org_unit',
+        scope_path: 'a.b',
+        scope_shift_id: null,
+        valid_from: PAST,
+        valid_to: null,
+        role_key: 'bc',
+      },
+      { permission: 'legacy.thing', scope_kind: 'department', scope_path: null, scope_shift_id: null, valid_from: PAST, valid_to: null, role_key: 'x' },
+    ]);
+    expect(grants).toEqual([
+      { permission: 'admin.roles.manage', scope: { kind: 'org_unit', path: 'a.b' }, shiftId: null, validFrom: PAST, validTo: null, roleKey: 'bc' },
+    ]);
+  });
+});

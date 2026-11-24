@@ -1,4 +1,5 @@
 import type { Permission } from './permissions';
+import { isPermission } from './permissions';
 
 export type GrantScope = { kind: 'self' } | { kind: 'department' } | { kind: 'org_unit'; path: string };
 
@@ -60,4 +61,36 @@ export function can(
     reason: `allowed by role ${match.roleKey} (${match.scope.kind})`,
     matchedRole: match.roleKey,
   };
+}
+
+/** Row shape returned by the SQL function app.my_grants(). */
+export type MyGrantRow = {
+  permission: string;
+  scope_kind: string;
+  scope_path: string | null;
+  scope_shift_id: string | null;
+  valid_from: Date;
+  valid_to: Date | null;
+  role_key: string;
+};
+
+export function toGrants(rows: MyGrantRow[]): Grant[] {
+  const grants: Grant[] = [];
+  for (const r of rows) {
+    if (!isPermission(r.permission)) continue;
+    let scope: GrantScope;
+    if (r.scope_kind === 'org_unit' && r.scope_path) scope = { kind: 'org_unit', path: r.scope_path };
+    else if (r.scope_kind === 'self') scope = { kind: 'self' };
+    else if (r.scope_kind === 'department') scope = { kind: 'department' };
+    else continue;
+    grants.push({
+      permission: r.permission,
+      scope,
+      shiftId: r.scope_shift_id,
+      validFrom: r.valid_from,
+      validTo: r.valid_to,
+      roleKey: r.role_key,
+    });
+  }
+  return grants;
 }
