@@ -71,6 +71,9 @@ importers:
         specifier: workspace:*
         version: link:../auth
     devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
       postgres:
         specifier: '*'
         version: 4.1.1
