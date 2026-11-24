@@ -32,6 +32,7 @@
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "1.63.0",
     "@soma/db": "workspace:*",
+    "@soma/templates": "workspace:*",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
