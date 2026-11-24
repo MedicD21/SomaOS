@@ -29,3 +29,28 @@ export async function hookClaims(tx: Tx, userId: string): Promise<Record<string,
     select public.custom_access_token_hook(${tx.json(event)}) as out`;
   return rows[0]!.out.claims;
 }
+
+/**
+ * Generic isolation check: rows inserted (as superuser) for tenants A and B; a user of A
+ * sees only A's row and cannot insert a row claiming tenant B.
+ */
+export async function expectTenantIsolation(
+  tx: Tx,
+  table: string,
+  insertRow: (tenantId: string) => Promise<void>,
+  insertAsUserForTenant: (tenantId: string) => Promise<unknown>,
+): Promise<void> {
+  const { asUser, expectDbError } = await import('../src/test-harness');
+  const a = await createTenant(tx, 'Iso A');
+  const b = await createTenant(tx, 'Iso B');
+  await insertRow(a);
+  await insertRow(b);
+  const u = await userInTenant(tx, a);
+  await asUser(tx, { sub: u, tenant_id: a }, async () => {
+    const rows = await tx`select distinct tenant_id from ${tx(table)}`;
+    if (rows.length !== 1 || rows[0]!.tenant_id !== a) {
+      throw new Error(`${table}: expected only tenant A rows, got ${JSON.stringify(rows)}`);
+    }
+    await expectDbError(tx, /row-level security/, () => insertAsUserForTenant(b));
+  });
+}
