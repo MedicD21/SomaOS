@@ -24,6 +24,10 @@ export const PERMISSIONS = {
   'scheduling.config.manage': { label: 'Manage shift patterns and seats', module: 'scheduling' },
   'credentials.view': { label: 'View member credentials', module: 'credentials', sensitive: 'HR' },
   'credentials.manage': { label: 'Record member credentials', module: 'credentials', sensitive: 'HR' },
+  'leave.request': { label: 'Request leave', module: 'leave' },
+  'leave.approve': { label: 'Approve or deny leave requests', module: 'leave' },
+  'leave.view': { label: 'View leave balances and requests', module: 'leave', sensitive: 'HR' },
+  'leave.manage': { label: 'Manage leave banks, policies and balances', module: 'leave', sensitive: 'HR' },
   'notifications.send': { label: 'Send notifications', module: 'notifications' },
 } as const satisfies Record<string, PermissionInfo>;
 
