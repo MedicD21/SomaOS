@@ -9,7 +9,7 @@
     "start": "next start --port 3000",
     "lint": "eslint src e2e tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests --exclude tests/db/**",
+    "test": "vitest run --passWithNoTests --exclude \"tests/db/**\"",
     "test:db": "vitest run tests/db",
     "e2e": "playwright test --trace off"
   },

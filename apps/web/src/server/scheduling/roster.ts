@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Permission, Target } from '@soma/auth';
-import { addDays, checkQualification, startOfLocalDay, type Explain, type IsoDate } from '@soma/schedule-engine';
+import { addDays, checkQualification, localDateOf, startOfLocalDay, type Explain, type IsoDate } from '@soma/schedule-engine';
 import type { AssignInput } from '@soma/validators';
 import type { Tx } from '@/server/db';
 import { loadMemberQuals, loadSeats, type SeatInfo } from './load';
@@ -123,6 +123,15 @@ export async function loadRoster(tx: Tx, date: IsoDate, orgUnitId: string | null
  * by someone holding scheduling.qualification.override at the seat's unit.
  */
 export async function assignToSeat(tx: Tx, can: Can, input: AssignInput): Promise<AssignResult> {
+  const start = new Date(input.start);
+  const end = new Date(input.end);
+  if (!(start.getTime() < end.getTime())) {
+    return { ok: false, blocked: [{ rule: 'input.invalid_range', message: 'The end must be after the start.' }] };
+  }
+  // Kelly days are generated from standing seats only and never occupy a seat.
+  if (input.type === 'kelly') {
+    return { ok: false, blocked: [{ rule: 'input.invalid_type', message: 'Kelly days cannot be assigned to a seat.' }] };
+  }
   const [seat] = await loadSeats(tx, { seatId: input.seatId });
   if (!seat) return { ok: false, blocked: [{ rule: 'seat.missing', message: 'That seat no longer exists.' }] };
   const target: Target = { orgUnitPath: seat.orgUnitPath };
@@ -131,9 +140,13 @@ export async function assignToSeat(tx: Tx, can: Can, input: AssignInput): Promis
   }
   const member = (await loadMemberQuals(tx, [input.memberId])).get(input.memberId);
   if (!member) return { ok: false, blocked: [{ rule: 'member.missing', message: 'That member was not found.' }] };
+  const [sep] = await tx<{ separated: boolean }[]>`
+    select (status = 'separated' or separated_on <= ${localDateOf(start, seat.tz)}::date) as separated
+    from members where id = ${input.memberId} and tenant_id = app.tenant_id()`;
+  if (sep?.separated) {
+    return { ok: false, blocked: [{ rule: 'member.separated', message: 'That member has separated from the department.' }] };
+  }
 
-  const start = new Date(input.start);
-  const end = new Date(input.end);
   const result = checkQualification(seat.rule, member, end, seat.tz);
   let overrideReason: string | null = null;
   if (!result.qualified) {
@@ -161,8 +174,12 @@ export async function assignToSeat(tx: Tx, can: Can, input: AssignInput): Promis
 
 /** Cancels a scheduled assignment (no hard deletes). Generation never resurrects it. */
 export async function cancelAssignment(tx: Tx, id: string, reason: string): Promise<void> {
+  const trimmed = reason.trim();
+  if (trimmed.length < 5 || trimmed.length > 500) {
+    throw new RangeError('A cancel reason of at least 5 characters is required');
+  }
   const rows = await tx`
-    update shift_assignments set status = 'cancelled', cancelled_reason = ${reason}
+    update shift_assignments set status = 'cancelled', cancelled_reason = ${trimmed}
     where id = ${id} and tenant_id = app.tenant_id() and status = 'scheduled'
     returning id`;
   if (rows.length === 0) throw new Error('That assignment was not found or is already cancelled.');

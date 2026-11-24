@@ -96,6 +96,22 @@ describe('generateRoster', () => {
     });
   });
 
+  it('cancelAssignment requires a 5-500 character reason', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      await asDeptAdmin(tx, d, async (can) => {
+        await generateRoster(tx, can, '2026-12-01', '2026-12-02');
+        const [gen] = await tx<{ id: string }[]>`select id from shift_assignments where source = 'generated' limit 1`;
+        const msg = 'A cancel reason of at least 5 characters is required';
+        await expect(cancelAssignment(tx, gen!.id, '   ab   ')).rejects.toThrow(new RangeError(msg));
+        await expect(cancelAssignment(tx, gen!.id, 'x'.repeat(501))).rejects.toThrow(RangeError);
+        await cancelAssignment(tx, gen!.id, '  Sick leave  ');
+        const [row] = await tx`select status, cancelled_reason from shift_assignments where id = ${gen!.id}`;
+        expect(row).toMatchObject({ status: 'cancelled', cancelled_reason: 'Sick leave' });
+      });
+    });
+  });
+
   it('rejects more than 120 days', async () => {
     await withAdmin(async (tx) => {
       const d = await demo(tx);
@@ -172,6 +188,34 @@ describe('assignToSeat', () => {
         if (res.ok) throw new Error('unreachable');
         expect(res.blocked[0]!.rule).toBe('permission');
       });
+    });
+  });
+
+  it('rejects an empty time range, kelly type and separated members without touching the DB', async () => {
+    await withAdmin(async (tx) => {
+      const d = await demo(tx);
+      const c = await caseyAfterExpiry(tx);
+      const [alex] = await tx<{ id: string }[]>`select id from members where first_name = 'Alex' and last_name = 'Ashford'`;
+      const base = { seatId: c.seatId, memberId: alex!.id, start: c.start, end: c.end, type: 'regular' as const };
+      const rules = async (p: Promise<{ ok: boolean; blocked?: { rule: string }[] }>) => {
+        const r = await p;
+        expect(r.ok).toBe(false);
+        return r.blocked!.map((e) => e.rule);
+      };
+      await asDeptAdmin(tx, d, async (can) => {
+        expect(await rules(assignToSeat(tx, can, { ...base, end: base.start }))).toEqual(['input.invalid_range']);
+        expect(await rules(assignToSeat(tx, can, { ...base, type: 'kelly' }))).toEqual(['input.invalid_type']);
+      });
+      await tx`update members set status = 'separated', separated_on = ${c.date}::date where id = ${alex!.id}`;
+      await asDeptAdmin(tx, d, async (can) => {
+        expect(await rules(assignToSeat(tx, can, base))).toEqual(['member.separated']);
+      });
+      // Separation dated on or before the shift blocks even if status is not yet 'separated'.
+      await tx`update members set status = 'active', separated_on = ${c.date}::date - 1 where id = ${alex!.id}`;
+      await asDeptAdmin(tx, d, async (can) => {
+        expect(await rules(assignToSeat(tx, can, base))).toEqual(['member.separated']);
+      });
+      expect(await tx`select 1 from shift_assignments where member_id = ${alex!.id}`).toHaveLength(0);
     });
   });
 
