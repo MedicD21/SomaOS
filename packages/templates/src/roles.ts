@@ -17,7 +17,7 @@ export const DEFAULT_ROLES: DepartmentTemplate['roles'] = [
   { key: 'volunteer', label: 'Volunteer', permissions: [...VIEW, 'scheduling.roster.view', 'leave.request'] },
   { key: 'probationary', label: 'Probationary', permissions: [...VIEW, 'scheduling.roster.view', 'leave.request'] },
   { key: 'scheduler', label: 'Scheduler', permissions: [...OFFICER, ...ROSTER, 'scheduling.config.manage', 'scheduling.qualification.override'] },
-  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, 'admin.members.manage', 'admin.custom_fields.manage', 'credentials.view', 'credentials.manage', 'scheduling.roster.view', 'leave.request', 'leave.view', 'leave.manage'] },
+  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, 'admin.members.manage', 'admin.custom_fields.manage', 'credentials.view', 'credentials.manage', 'scheduling.roster.view', 'leave.request', 'leave.view', 'leave.manage', 'pay.view', 'pay.manage'] },
   { key: 'training_officer', label: 'Training Officer', permissions: [...OFFICER, 'credentials.view', 'credentials.manage'] },
   { key: 'logistics_officer', label: 'Logistics / Inventory Officer', permissions: OFFICER },
   { key: 'ems_officer', label: 'EMS Officer / QA Reviewer', permissions: OFFICER },

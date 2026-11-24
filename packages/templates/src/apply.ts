@@ -66,6 +66,22 @@ export async function applyTemplate(
                      ${tx.json(p.payload as never)}, 'Starter values from the department template — review before approving')
              on conflict (tenant_id, kind, key, version) do nothing`;
   }
+  for (const [i, c] of template.pay.codes.entries()) {
+    await tx`insert into pay_codes (tenant_id, key, label, kind, multiplier, counts_toward_flsa, export_code, sort)
+             values (${tenantId}, ${c.key}, ${c.label}, ${c.kind}, ${c.multiplier}, ${c.countsTowardFlsa}, ${c.exportCode}, ${i + 1})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  for (const g of template.pay.groups) {
+    await tx`insert into employee_groups (tenant_id, key, label) values (${tenantId}, ${g.key}, ${g.label})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  // Starter pay rules are DRAFTS: nothing is calculated for pay until an administrator edits and approves them.
+  for (const r of template.pay.rules) {
+    await tx`insert into config_versions (tenant_id, kind, key, version, status, effective, payload, change_note)
+             values (${tenantId}, 'pay.rules', ${r.groupKey}, 1, 'draft', tstzrange(null, null),
+                     ${tx.json(r.payload as never)}, 'Starter values from the department template — review before approving')
+             on conflict (tenant_id, kind, key, version) do nothing`;
+  }
   await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
            where tenant_id = ${tenantId} and enabled_modules = '{}'`;
 

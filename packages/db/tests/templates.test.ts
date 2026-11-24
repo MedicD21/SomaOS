@@ -90,4 +90,21 @@ describe('applyTemplate', () => {
       expect(v!.n).toBe(4);
     });
   });
+
+  it('pay: creates codes, a group and DRAFT rules, idempotently', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const u = await createTestUser(tx);
+      const admin = { userId: u, firstName: 'Pat', lastName: 'Chief' };
+      await applyTemplate(tx, t, TEMPLATES['career-3-platoon'], admin);
+      await applyTemplate(tx, t, TEMPLATES['career-3-platoon'], admin);
+      const [c] = await tx`
+        select (select count(*)::int from pay_codes where tenant_id = ${t}) as codes,
+               (select count(*)::int from pay_codes where tenant_id = ${t} and kind = 'leave') as leave_codes,
+               (select count(*)::int from employee_groups where tenant_id = ${t}) as groups,
+               (select count(*)::int from config_versions where tenant_id = ${t} and kind = 'pay.rules') as rules,
+               (select count(*)::int from config_versions where tenant_id = ${t} and kind = 'pay.rules' and status <> 'draft') as not_draft`;
+      expect(c).toEqual({ codes: 12, leave_codes: 7, groups: 1, rules: 1, not_draft: 0 });
+    });
+  });
 });

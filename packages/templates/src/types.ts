@@ -1,6 +1,7 @@
 import type { Permission } from '@soma/auth';
 import type { ShiftPattern, Validity } from '@soma/schedule-engine';
 import type { LeaveTemplate } from './leave';
+import type { PayTemplate } from './pay';
 
 export type DepartmentTemplate = {
   key: string;
@@ -14,4 +15,5 @@ export type DepartmentTemplate = {
   /** Platoon keys in the payload are the template's shift keys. */
   schedulePattern: { key: string; payload: ShiftPattern } | null;
   leave: LeaveTemplate;
+  pay: PayTemplate;
 };
