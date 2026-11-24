@@ -76,3 +76,28 @@ export async function createOrgUnit(tx: Tx, tenantId: string, name = 'Station 1'
     insert into org_units (tenant_id, type_id, parent_id, name) values (${tenantId}, ${t[0]!.id}, ${parentId}, ${name}) returning id`;
   return r[0]!.id;
 }
+
+export async function createRole(tx: Tx, tenantId: string, key: string, permissions: string[]): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into roles (tenant_id, key, label) values (${tenantId}, ${key}, ${key}) returning id`;
+  const roleId = r[0]!.id;
+  for (const p of permissions) {
+    await tx`insert into role_permissions (tenant_id, role_id, permission) values (${tenantId}, ${roleId}, ${p})`;
+  }
+  return roleId;
+}
+
+export async function grantRole(
+  tx: Tx,
+  tenantId: string,
+  memberId: string,
+  roleId: string,
+  opts: { scopeKind?: 'self' | 'org_unit' | 'department'; orgUnitId?: string | null; shiftId?: string | null; valid?: string } = {},
+): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into role_grants (tenant_id, member_id, role_id, scope_kind, scope_org_unit_id, scope_shift_id, valid)
+    values (${tenantId}, ${memberId}, ${roleId}, ${opts.scopeKind ?? 'department'}, ${opts.orgUnitId ?? null},
+            ${opts.shiftId ?? null}, ${opts.valid ?? '[2026-01-01,)'}::tstzrange)
+    returning id`;
+  return r[0]!.id;
+}

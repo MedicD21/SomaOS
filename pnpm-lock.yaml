@@ -30,6 +30,8 @@ importers:
         specifier: ^5.1.1
         version: 5.1.1(@types/node@26.6.6)(vite@8.3.8(@types/node@26.6.6))
 
+  packages/auth: {}
+
   packages/db:
     dependencies:
       postgres:
