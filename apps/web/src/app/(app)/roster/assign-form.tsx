@@ -1,5 +1,5 @@
 'use client';
-import { startTransition, useActionState, type FormEvent } from 'react';
+import { startTransition, useActionState, type SubmitEvent } from 'react';
 import { ActionForm } from '@/components/action-form';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select } from '@/components/ui/field';
@@ -32,7 +32,7 @@ export function AssignForm({ seatId, date, label, members, canOverride, defaultS
   const id = (f: string) => `fill-${seatId}-${f}`;
   const askReason = canOverride && !!state.overridable;
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     startTransition(() => formAction(data));

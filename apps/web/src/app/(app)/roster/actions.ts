@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { addDays, localPlusHoursToInstant, localToInstant } from '@soma/schedule-engine';
 import { assignSchema } from '@soma/validators';
+import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
 import { friendlyDbError } from '@/server/actions';
 import type { RequestContext } from '@/server/context';
@@ -16,6 +17,8 @@ export type AssignState = ActionResult & { blocked?: string[]; overridable?: boo
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const uuid = z.uuid();
+const MODULE_OFF: ActionResult = { ok: false, message: 'Scheduling is not enabled for this department.' };
 
 function canFor(ctx: RequestContext): Can {
   return (permission, target) => check(ctx, permission, target).allowed;
@@ -37,6 +40,7 @@ export async function generateSchedule(_prev: ActionResult, form: FormData): Pro
   const to = String(form.get('to') ?? '');
   if (!DATE.test(from) || !DATE.test(to)) return { ok: false, message: 'Enter a start and end date.' };
   const ctx = await getRequestContext();
+  if (!ctx.tenant.enabledModules.includes('scheduling')) return MODULE_OFF;
   const d = check(ctx, 'scheduling.config.manage');
   if (!d.allowed) return { ok: false, message: `Not allowed: ${d.reason}` };
   try {
@@ -52,9 +56,11 @@ export async function fillSeat(seatId: string, date: string, _prev: AssignState,
   const startTime = String(form.get('startTime') ?? '');
   const hours = Number(form.get('hours'));
   if (!DATE.test(date) || !TIME.test(startTime)) return { ok: false, message: 'Enter a start time as HH:MM.' };
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 48) return { ok: false, message: 'Hours must be between 1 and 48.' };
+  if (!uuid.safeParse(seatId).success) return { ok: false, message: 'That seat no longer exists.' };
+  if (!Number.isInteger(hours) || hours < 1 || hours > 48) return { ok: false, message: 'Hours must be between 1 and 48.' };
   const reason = String(form.get('overrideReason') ?? '').trim();
   const ctx = await getRequestContext();
+  if (!ctx.tenant.enabledModules.includes('scheduling')) return MODULE_OFF;
   try {
     const result = await withCtxDb(ctx, async (tx) => {
       const [seat] = await loadSeats(tx, { seatId });
@@ -75,7 +81,6 @@ export async function fillSeat(seatId: string, date: string, _prev: AssignState,
           : 'Check the fill details.';
         return { ok: false as const, blocked: [{ rule: field === 'overrideReason' ? 'override.reason' : 'input', message }] };
       }
-      await setReason(tx, parsed.data.overrideReason);
       return assignToSeat(tx, canFor(ctx), parsed.data);
     });
     if (!result.ok) {
@@ -91,7 +96,9 @@ export async function fillSeat(seatId: string, date: string, _prev: AssignState,
 
 export async function cancelShift(assignmentId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
   const reason = String(form.get('reason') ?? '').trim();
+  if (!uuid.safeParse(assignmentId).success) return { ok: false, message: 'That assignment was not found or is already cancelled.' };
   const ctx = await getRequestContext();
+  if (!ctx.tenant.enabledModules.includes('scheduling')) return MODULE_OFF;
   try {
     await withCtxDb(ctx, async (tx) => {
       const [row] = await tx<{ path: string }[]>`

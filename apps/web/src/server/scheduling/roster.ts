@@ -161,6 +161,8 @@ export async function assignToSeat(tx: Tx, can: Can, input: AssignInput): Promis
       };
     }
     overrideReason = input.overrideReason;
+    // Only an applied override is recorded as the audit reason for this insert.
+    await tx`select set_config('app.reason', ${overrideReason}, true)`;
   }
 
   const [row] = await tx<{ id: string }[]>`
