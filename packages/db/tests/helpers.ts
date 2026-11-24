@@ -54,3 +54,25 @@ export async function expectTenantIsolation(
     await expectDbError(tx, /row-level security/, () => insertAsUserForTenant(b));
   });
 }
+
+export async function createMember(
+  tx: Tx,
+  tenantId: string,
+  opts: { userId?: string | null; first?: string; last?: string; employeeNumber?: string } = {},
+): Promise<string> {
+  const rows = await tx<{ id: string }[]>`
+    insert into members (tenant_id, user_id, first_name, last_name, employee_number, employment_type)
+    values (${tenantId}, ${opts.userId ?? null}, ${opts.first ?? 'Pat'}, ${opts.last ?? 'Medic'},
+            ${opts.employeeNumber ?? crypto.randomUUID().slice(0, 8)}, 'career_full_time')
+    returning id`;
+  return rows[0]!.id;
+}
+
+export async function createOrgUnit(tx: Tx, tenantId: string, name = 'Station 1', parentId: string | null = null): Promise<string> {
+  const t = await tx<{ id: string }[]>`
+    insert into org_unit_types (tenant_id, key, label) values (${tenantId}, 'station', 'Station')
+    on conflict (tenant_id, key) do update set label = excluded.label returning id`;
+  const r = await tx<{ id: string }[]>`
+    insert into org_units (tenant_id, type_id, parent_id, name) values (${tenantId}, ${t[0]!.id}, ${parentId}, ${name}) returning id`;
+  return r[0]!.id;
+}
