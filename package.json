@@ -1,0 +1,35 @@
+{
+  "name": "somaos",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "db:start": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset && tsx scripts/seed-dev.ts",
+    "test:unit": "turbo run test --filter=!@soma/db",
+    "test:db": "pnpm -F @soma/db test && pnpm -F @soma/worker test:db",
+    "db:seed": "tsx scripts/seed-dev.ts",
+    "env:local": "tsx scripts/write-env.ts"
+  },
+  "devDependencies": {
+    "@soma/templates": "workspace:*",
+    "eslint": "^10.15.0",
+    "postgres": "^4.1.1",
+    "prettier": "^3.10.1",
+    "supabase": "^3.3.0",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.13",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^5.1.1"
+  },
+  "type": "module"
+}

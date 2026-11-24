@@ -1,0 +1,53 @@
+import 'server-only';
+import { revalidatePath } from 'next/cache';
+import type { Permission } from '@soma/auth';
+import type { RequestContext } from './context';
+import { check, getRequestContext, withCtxDb } from './context';
+import type { Tx } from './db';
+
+export type ActionResult = { ok: boolean | null; message: string | null; fieldErrors?: Record<string, string> };
+export const IDLE: ActionResult = { ok: null, message: null };
+
+/** Maps database errors to messages a department admin can act on. */
+export function friendlyDbError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/org unit cycle/.test(msg)) return 'A unit cannot be moved under itself or one of its own sub-units.';
+  if (/cannot remove last admin/.test(msg)) return 'cannot remove last admin: the department must keep at least one department-wide admin.';
+  if (/duplicate key/.test(msg)) return 'That key or name is already in use.';
+  if (/member_assignments_no_overlap/.test(msg)) return 'That member already has a primary assignment for those dates.';
+  if (/row-level security|permission denied/.test(msg)) return 'You do not have permission to make that change.';
+  if (/unknown timezone/.test(msg)) return 'Unknown time zone.';
+  console.error(e);
+  return 'Something went wrong saving your change.';
+}
+
+/**
+ * Runs an admin mutation: checks permission, runs fn as the signed-in user (RLS applies),
+ * records an optional change reason for the audit log, and revalidates admin pages.
+ */
+export async function runAdmin(
+  permission: Permission,
+  form: FormData | null,
+  fn: (tx: Tx, ctx: RequestContext) => Promise<string>,
+): Promise<ActionResult> {
+  const ctx = await getRequestContext();
+  const decision = check(ctx, permission);
+  if (!decision.allowed) return { ok: false, message: `Not allowed: ${decision.reason}` };
+  try {
+    const reason = form?.get('reason');
+    const message = await withCtxDb(ctx, async (tx) => {
+      if (typeof reason === 'string' && reason.trim()) await tx`select set_config('app.reason', ${reason.trim()}, true)`;
+      return fn(tx, ctx);
+    });
+    revalidatePath('/', 'layout');
+    return { ok: true, message };
+  } catch (e) {
+    return { ok: false, message: friendlyDbError(e) };
+  }
+}
+
+export function zodFieldErrors(issues: { path: PropertyKey[]; message: string }[]): ActionResult {
+  const fieldErrors: Record<string, string> = {};
+  for (const i of issues) fieldErrors[i.path.join('.')] ??= i.message;
+  return { ok: false, message: 'Please fix the highlighted fields.', fieldErrors };
+}
