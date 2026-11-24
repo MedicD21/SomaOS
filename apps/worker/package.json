@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@soma/schedule-engine": "workspace:*",
+    "@soma/validators": "workspace:*",
     "@supabase/supabase-js": "^2.119.2",
     "nodemailer": "^10.6.1",
     "postgres": "^4.1.1",

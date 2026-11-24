@@ -117,6 +117,9 @@ importers:
       '@soma/schedule-engine':
         specifier: workspace:*
         version: link:../../packages/schedule-engine
+      '@soma/validators':
+        specifier: workspace:*
+        version: link:../../packages/validators
       '@supabase/supabase-js':
         specifier: ^2.119.2
         version: 2.119.2
