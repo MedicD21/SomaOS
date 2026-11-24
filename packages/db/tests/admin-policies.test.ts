@@ -12,7 +12,7 @@ async function userWith(tx: Tx, t: string, perms: string[]): Promise<string> {
   return u;
 }
 
-const updated = async (q: Promise<unknown[]>) => (await q).length;
+const updated = async (q: PromiseLike<readonly unknown[]>) => (await q).length;
 
 describe('admin write policies', () => {
   it('blocks settings and org writes for members without admin permissions', async () => {
