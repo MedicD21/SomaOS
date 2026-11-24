@@ -58,6 +58,24 @@ export async function createTestUser(tx: Tx, email?: string): Promise<string> {
   return rows[0]!.id;
 }
 
+/**
+ * Asserts that fn fails with an error matching pattern, inside a savepoint so the
+ * surrounding test transaction stays usable.
+ */
+export async function expectDbError(tx: Tx, pattern: RegExp, fn: () => Promise<unknown>): Promise<void> {
+  let error: unknown = null;
+  try {
+    await tx.savepoint(async () => {
+      await fn();
+    });
+  } catch (e) {
+    error = e;
+  }
+  if (!error) throw new Error(`expected database error matching ${pattern}, but call succeeded`);
+  const message = error instanceof Error ? error.message : String(error);
+  if (!pattern.test(message)) throw new Error(`expected error matching ${pattern}, got: ${message}`);
+}
+
 export async function closeTestDb(): Promise<void> {
   await sql?.end();
   sql = null;
