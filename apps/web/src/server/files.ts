@@ -17,7 +17,7 @@ export class UploadError extends Error {}
  */
 export async function uploadAttachment(
   ctx: RequestContext,
-  input: { entity: string; entityId: string; file: File },
+  input: { entity: string; entityId: string; file: File; sensitivity?: 'HR' | null },
 ): Promise<Attachment> {
   requirePermission(ctx, 'files.upload');
   const problem = validateUpload({ size: input.file.size, type: input.file.type });
@@ -31,8 +31,9 @@ export async function uploadAttachment(
   if (error) throw new UploadError(`Upload failed: ${error.message}`);
 
   const [row] = await withCtxDb(ctx, (tx) => tx<Attachment[]>`
-    insert into attachments (tenant_id, entity, entity_id, object_path, file_name, mime_type, size_bytes, sha256)
-    values (app.tenant_id(), ${input.entity}, ${input.entityId}, ${path}, ${input.file.name.slice(0, 200)}, ${input.file.type}, ${bytes.length}, ${sha256})
+    insert into attachments (tenant_id, entity, entity_id, object_path, file_name, mime_type, size_bytes, sha256, sensitivity)
+    values (app.tenant_id(), ${input.entity}, ${input.entityId}, ${path}, ${input.file.name.slice(0, 200)}, ${input.file.type}, ${bytes.length}, ${sha256},
+            ${input.sensitivity ?? null})
     returning id, file_name, mime_type, size_bytes, uploaded_at`);
   return row!;
 }
@@ -47,7 +48,10 @@ export async function listAttachments(ctx: RequestContext, entity: string, entit
 export async function getSignedUrl(ctx: RequestContext, attachmentId: string): Promise<string | null> {
   requirePermission(ctx, 'files.view');
   const [row] = await withCtxDb(ctx, (tx) => tx<{ object_path: string; file_name: string }[]>`
-    select object_path, file_name from attachments where id = ${attachmentId}`);
+    select a.object_path, a.file_name from attachments a
+    where a.id = ${attachmentId}
+      -- HR documents on a credential follow the credential's own read rule (credentials.view or own record).
+      and (a.entity <> 'member_credential' or exists (select 1 from member_credentials c where c.id = a.entity_id))`);
   if (!row) return null;
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(row.object_path, 300, { download: row.file_name });
