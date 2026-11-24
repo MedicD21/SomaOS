@@ -16,7 +16,7 @@ const SNAP = { rows: [] };
 
 // Read as the superuser (payroll cannot read other members' ledgers), then go back to the caller's role.
 const balance = async (tx: Tx, member: string, bank: string) => {
-  const [{ r }] = await tx<{ r: string }[]>`select current_user as r`;
+  const r = (await tx<{ r: string }[]>`select current_user as r`)[0]!.r;
   await tx`reset role`;
   const rows = await tx<{ h: string | null }[]>`select sum(hours) as h from leave_ledger where member_id = ${member} and bank_id = ${bank}`;
   if (r !== 'postgres') await tx`select set_config('role', ${r}, true)`;

@@ -212,9 +212,8 @@ Local email (including these links) is in Mailpit at http://127.0.0.1:54324.
 
 Design: master design §7.2–7.3. Plan: `docs/superpowers/plans/2026-11-24-phase-1c-pay-engine.md`.
 
-**What it is:** a *preview* of hours and dollars by pay code for a pay period, calculated from **scheduled shifts and
-approved leave**. It is not a timesheet: actual time, after-the-fact holdovers, approval and payroll lock are the next
-slice (1c-2).
+**What it is:** hours and dollars by pay code for a pay period, calculated from **scheduled shifts, recorded time
+entries and approved leave**. It is a calculation until payroll **closes** the period (see *Time and payroll close*).
 
 ### Concepts
 - **Pay code** — a named kind of pay (Regular, Overtime, Holdover, a leave type…), with a multiplier and an optional
@@ -240,8 +239,8 @@ slice (1c-2).
 5. A callback shorter than `minimumHours` is topped up; the top-up is paid but is not time worked.
 6. `compTime`: with `always`, or `member_choice` when the member prefers it, overtime lines earn comp credit
    (hours × `compTime.multiplier`) and **no cash**. A member's preference is the custom field `prefers_comp_time`
-   (yes/no) on their member record — create it under **Admin → Custom fields**. Comp credit is shown and exported;
-   **posting it to the leave ledger is part of 1c-2**.
+   (yes/no) on their member record — create it under **Admin → Custom fields**. Comp credit is shown and exported, and
+   is posted to the leave ledger when the period is closed.
 7. Each line's dollars are rounded to cents; a member with no rate gets blank amounts, not zero.
 
 ```json
@@ -274,6 +273,41 @@ period election and agreement. Starter rules are created as drafts; nothing is c
   leave (`scheduling.roster.view`, `leave.view`); the Payroll / HR role has all of these.
 
 ### Not yet
-Actual-time timesheets, officer approval and payroll lock, posting comp time to the ledger, per-payroll-system file
-formats, salaried members, regular-rate adjustments for non-discretionary pay, and rates or rules that change in the
+Whole-timesheet officer sign-off before close, per-payroll-system file formats, salaried members, regular-rate adjustments for non-discretionary pay, and rates or rules that change in the
 middle of a pay period (they take effect at the start of the next one).
+
+## Time and payroll close (Phase 1c-2)
+
+Plan: `docs/superpowers/plans/2026-11-24-phase-1c2-time-and-close.md`.
+
+### Recording time (`/time`)
+- A **time entry** is hours worked that differ from the schedule (a holdover, a callback, extra hours): member, date,
+  hours (0–48), a work type (the same eight as the pay rules) and a reason. It is added to the pay period as extra work,
+  so it counts toward the work-period threshold and is paid by the group's `assignments` rule for that type.
+- Who may record it is decided **in the database** (`app.can_edit_time`): an officer with `scheduling.roster.edit` whose
+  grant covers the member's station (primary assignment, else standing seat) and, if the grant is limited to a shift,
+  the member's shift; or department-wide `pay.manage` (payroll). **Nobody records time for themselves.** The page lists
+  only the members the caller covers.
+- Entries are never edited or deleted. A mistake is **voided** with a reason (who/when/why kept) and recorded again.
+- Writes only go through `app.add_time_entry` / `app.void_time_entry`; the table has no direct insert/update/delete.
+
+### Closing a pay period (`/pay`)
+- **Close** (department-wide `pay.manage`) recalculates the period, **refuses if any member could not be calculated**
+  (for example no approved rules — nothing is guessed), then in one database call stores the frozen result
+  (`pay_period_closes.snapshot`), credits comp time to each member's bank (`earn` ledger rows, `run_key comp:<close id>`,
+  dated the period's last day) and locks the dates.
+- A **closed period is read from its snapshot**: later changes to rates, pay rules or the roster do not change it, and the
+  CSV export carries the frozen numbers. Time entries dated in a closed period cannot be added or voided
+  (`That pay period is closed`).
+- **Reopen** needs a reason (5+ characters). It posts a matching `reversal` for the comp credit (once), unlocks the dates,
+  and the page is live again; closing again posts fresh credit. Every close and reopen is audited.
+- Closing is exact-period: the close covers the pay period shown (its start is the period start). Overlapping closed
+  periods are refused.
+
+### Tests
+`pnpm -F @soma/db test` (`pay-close`, `time-entries`), `pnpm -F @soma/web test:db` (loader with entries and snapshots),
+`pnpm -F @soma/web e2e e2e/time-close.spec.ts`.
+
+### Not yet
+Early-relief (negative) adjustments, whole-timesheet officer sign-off, per-payroll-system formats, mid-period rate or rule
+changes.

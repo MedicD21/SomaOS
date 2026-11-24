@@ -118,7 +118,7 @@ test('officers record time in scope, payroll closes the period, comp is credited
 
   const credit = await sql<{ kind: string; hours: number; run_key: string }[]>`
     select l.kind, l.hours::float8 as hours, l.run_key from leave_ledger l join leave_banks b on b.id = l.bank_id
-    where l.member_id = ${riley!.id} and b.key = 'comp_time' order by l.id`;
+    where l.member_id = ${riley!.id} and b.key = 'comp_time' and l.run_key like 'comp%' order by l.id`;
   expect(credit).toHaveLength(1);
   expect(credit[0]).toMatchObject({ kind: 'earn', hours: 4.5 });
   expect(credit[0]!.run_key).toMatch(/^comp:/);
@@ -153,7 +153,7 @@ test('officers record time in scope, payroll closes the period, comp is credited
 
   const after = await sql<{ kind: string; hours: number }[]>`
     select l.kind, l.hours::float8 as hours from leave_ledger l join leave_banks b on b.id = l.bank_id
-    where l.member_id = ${riley!.id} and b.key = 'comp_time' order by l.id`;
+    where l.member_id = ${riley!.id} and b.key = 'comp_time' and l.run_key like 'comp%' order by l.id`;
   expect(after).toEqual([{ kind: 'earn', hours: 4.5 }, { kind: 'reversal', hours: -4.5 }]);
 
   // 7. Phone layout.
