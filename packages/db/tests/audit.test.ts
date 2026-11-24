@@ -16,7 +16,7 @@ describe('audit log', () => {
   it('records updates with actor, changed fields, before/after and reason', async () => {
     await withAdmin(async (tx) => {
       const t = await createTenant(tx);
-      const { u } = await memberUser(tx, t, []);
+      const { u } = await memberUser(tx, t, ['admin.members.manage']);
       const target = await createMember(tx, t);
       await asUser(tx, { sub: u, tenant_id: t }, async () => {
         await tx`select set_config('app.reason', 'name correction', true)`;

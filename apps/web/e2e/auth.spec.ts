@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { generateSync } from 'otplib';
+import { sql } from './db';
 import { expectAccessible, login } from './helpers';
 
 test('wrong password shows a generic error', async ({ page }) => {
@@ -9,6 +10,7 @@ test('wrong password shows a generic error', async ({ page }) => {
 });
 
 test('admin must enroll MFA, then reaches the dashboard', async ({ page }) => {
+  await sql`delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'admin@soma.local')`;
   await login(page, 'admin@soma.local');
   await expect(page).toHaveURL(/\/mfa/);
   await expectAccessible(page);
