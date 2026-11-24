@@ -32,8 +32,8 @@ function shortDate(d: string): string {
 
 export default async function PatternsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const approved = /^\d{1,6}$/.test(sp.approved ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(sp.from ?? '') && /^\d{1,9}$/.test(sp.cancelled ?? '')
-    ? { version: sp.approved!, from: sp.from!, cancelled: sp.cancelled! }
+  const approved = /^\d{1,6}$/.test(sp.approved ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(sp.from ?? '') && /^\d{1,9}$/.test(sp.replaced ?? '')
+    ? { version: sp.approved!, from: sp.from!, replaced: sp.replaced! }
     : null;
   const ctx = await getRequestContext();
   if (!ctx.tenant.enabledModules.includes('scheduling')) return <Forbidden reason="Scheduling is not enabled for this department." />;
@@ -72,7 +72,7 @@ export default async function PatternsPage({ searchParams }: { searchParams: Pro
       <h1 className="text-2xl font-bold">Shift patterns</h1>
       {approved && (
         <p role="status" className="rounded-lg border border-line bg-surface p-4 text-sm font-medium">
-          Approved v{approved.version} effective {approved.from}; cancelled {approved.cancelled} generated shifts from that date.
+          Approved v{approved.version} effective {approved.from}; replaced {approved.replaced} generated shifts from that date.
           Regenerate the schedule on the roster page to recreate them.
         </p>
       )}

@@ -159,7 +159,7 @@ test('a new standing seat ends the current one', async ({ page }) => {
   await form.getByLabel('Kelly group').fill('5');
   await form.getByLabel('Effective from').fill(from);
   await form.getByRole('button', { name: 'Save standing seat' }).click();
-  await expect(form.getByRole('status')).toHaveText(`Standing seat saved from ${from}`);
+  await expect(form.getByRole('status')).toContainText(`Standing seat saved from ${from}`);
   const table = page.getByRole('table', { name: 'Standing seats' });
   await expect(table.getByRole('row')).toHaveCount(3);
   await expect(table.getByRole('row').nth(1)).toContainText(`${from}`);

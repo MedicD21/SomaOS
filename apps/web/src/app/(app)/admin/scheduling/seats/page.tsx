@@ -33,6 +33,13 @@ export default async function SeatsPage() {
     id: s.id, orgUnitId: s.org_unit_id, label: s.label, sort: s.sort, required: s.required, minRankId: s.min_rank_id,
     actingAllowed: s.acting_allowed, status: s.status, groups: s.groups ?? [],
   }));
+  // Archived types a seat still requires stay selectable (checked) on that seat, so saving keeps them.
+  const typesFor = (s: SeatValues): Option[] => [
+    ...activeTypes,
+    ...data.types
+      .filter((ty) => ty.status !== 'active' && s.groups.some((g) => g.includes(ty.id)))
+      .map((ty) => ({ id: ty.id, label: `${ty.label} (archived)` })),
+  ];
   const unitsWithSeats = data.units.filter((u) => seats.some((s) => s.orgUnitId === u.id));
   const requirements = (s: SeatValues) =>
     s.groups.length === 0 ? 'None' : s.groups.map((g) => g.map((id) => typeLabel.get(id) ?? '?').join(' or ')).join(' and ');
@@ -77,7 +84,7 @@ export default async function SeatsPage() {
                     <td className="space-y-2 py-2">
                       <details>
                         <summary className="inline-flex min-h-11 cursor-pointer items-center underline">Edit {s.label}</summary>
-                        <SeatForm seat={s} units={unitOptions} ranks={data.ranks} types={activeTypes} />
+                        <SeatForm seat={s} units={unitOptions} ranks={data.ranks} types={typesFor(s)} />
                       </details>
                       <SeatStatusForm seat={s} />
                     </td>

@@ -15,8 +15,8 @@ export class RosterPermissionError extends Error {
 
 /**
  * Generates regular and Kelly assignments from standing seats for [from, toExclusive), as the
- * signed-in user (RLS applies). Idempotent: rows that already exist (including cancelled
- * generated rows) or that would collide with any scheduled assignment are skipped.
+ * signed-in user (RLS applies). Idempotent: rows that already exist (including user-cancelled
+ * generated rows, but not superseded ones) or that would collide with any scheduled assignment are skipped.
  */
 export async function generateRoster(
   tx: Tx,
@@ -90,4 +90,31 @@ export async function generateRoster(
     on conflict do nothing
     returning id`;
   return { inserted: inserted.length, skipped: planned.length - inserted.length };
+}
+
+/**
+ * Marks future generated, still-scheduled shifts whose local start date (seat unit timezone,
+ * else the tenant's) is on or after `fromDate` as 'superseded', optionally for one member.
+ * Superseded rows are hidden like cancelled ones but free their generation slot, so the next
+ * generation recreates them from the current pattern and standing seats.
+ * `reason` null records 'Pattern version <row version> replaced'. Needs department roster edit
+ * (rows the caller cannot update are silently skipped by RLS).
+ */
+export async function supersedeGenerated(
+  tx: Tx,
+  fromDate: IsoDate,
+  opts: { memberId?: string; reason: string | null },
+): Promise<number> {
+  const rows = await tx`
+    update shift_assignments a
+    set status = 'superseded',
+        cancelled_reason = coalesce(${opts.reason}::text, 'Pattern version ' || coalesce(a.pattern_version::text, '?') || ' replaced')
+    where a.tenant_id = app.tenant_id() and a.source = 'generated' and a.status = 'scheduled'
+      ${opts.memberId ? tx`and a.member_id = ${opts.memberId}` : tx``}
+      and lower(a.during) > now()
+      and (lower(a.during) at time zone coalesce(
+            (select ou.timezone from seats s join org_units ou on ou.id = s.org_unit_id where s.id = a.seat_id),
+            (select t.timezone from tenants t where t.id = a.tenant_id)))::date >= ${fromDate}::date
+    returning a.id`;
+  return rows.length;
 }

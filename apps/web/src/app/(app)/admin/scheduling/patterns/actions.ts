@@ -36,16 +36,16 @@ export async function approvePattern(version: number, _prev: ActionResult, form:
   if (!Number.isInteger(version) || version < 1) return { ok: false, message: 'Unknown draft.' };
   const ctx = await getRequestContext();
   if (!ctx.tenant.enabledModules.includes('scheduling')) return MODULE_OFF;
-  // Approval cancels generated shifts department-wide, so it also needs department roster edit.
+  // Approval supersedes generated shifts department-wide, so it also needs department roster edit.
   const roster = check(ctx, 'scheduling.roster.edit');
   if (!roster.allowed) return { ok: false, message: `Not allowed: ${roster.reason}` };
   const today = localDateOf(new Date(), ctx.tenant.timezone);
-  let cancelled = 0;
+  let superseded = 0;
   const result = await runAdmin('admin.config.manage', form, async (tx) => {
-    cancelled = (await approvePatternDraft(tx, version, effectiveDate, today)).cancelled;
+    superseded = (await approvePatternDraft(tx, version, effectiveDate, today)).superseded;
     return 'Approved';
   });
   if (!result.ok) return result;
   // The draft (and this form) is gone once approved, so report the outcome on the page itself.
-  redirect(`/admin/scheduling/patterns?approved=${version}&from=${effectiveDate}&cancelled=${cancelled}`);
+  redirect(`/admin/scheduling/patterns?approved=${version}&from=${effectiveDate}&replaced=${superseded}`);
 }

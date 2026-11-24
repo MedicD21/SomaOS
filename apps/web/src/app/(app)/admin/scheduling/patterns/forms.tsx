@@ -77,7 +77,7 @@ export function ApproveForm({ version, defaultDate }: { version: number; default
     <ActionForm action={approvePattern.bind(null, version)} label="Approve pattern" submitLabel={`Approve v${version}`}>
       {(e) => (
         <Field id="pat-approve-date" label="Effective from" error={e.effectiveFrom}
-          hint="The current version ends the day before. Generated shifts from this date are cancelled; regenerate afterwards.">
+          hint="The current version ends the day before. Generated shifts from this date are withdrawn; regenerate afterwards to recreate them.">
           <Input id="pat-approve-date" name="effectiveFrom" type="date" defaultValue={defaultDate} required />
         </Field>
       )}

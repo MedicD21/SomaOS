@@ -5,7 +5,8 @@ import { assignmentSchema, memberCredentialSchema, memberSchema, standingSeatSch
 import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
 import { ActionError, runAdmin, zodFieldErrors } from '@/server/actions';
-import { getRequestContext, hasAny, withCtxDb } from '@/server/context';
+import { check, getRequestContext, hasAny, withCtxDb } from '@/server/context';
+import { changeStandingSeat } from '@/server/scheduling/standing';
 import { customFromForm, loadFieldDefs, validateCustom } from '@/server/custom-fields';
 
 function readMember(form: FormData) {
@@ -89,10 +90,7 @@ export async function sendInvite(memberId: string, _prev: ActionResult, form: Fo
 
 const uuid = z.uuid();
 
-/**
- * Starts a standing (regular) seat on date D. A seat the member holds across D is ended at D
- * in the same transaction; a later one makes the exclusion constraint reject the change.
- */
+/** Starts a standing seat; see changeStandingSeat. Also supersedes the member's future generated shifts. */
 export async function saveStandingSeat(memberId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
   const kelly = String(form.get('kellyGroup') ?? '').trim();
   const parsed = standingSeatSchema.safeParse({
@@ -103,19 +101,13 @@ export async function saveStandingSeat(memberId: string, _prev: ActionResult, fo
     effectiveFrom: form.get('effectiveFrom'),
   });
   if (!parsed.success) return zodFieldErrors(parsed.error.issues);
-  const v = parsed.data;
+  const ctx = await getRequestContext();
+  // Superseding the member's generated shifts (incl. seatless Kelly days) needs department roster edit.
+  const roster = check(ctx, 'scheduling.roster.edit');
+  if (!roster.allowed) return { ok: false, message: `Not allowed: ${roster.reason}` };
   return runAdmin('scheduling.config.manage', form, async (tx) => {
-    const [seat] = await tx`select 1 from seats where id = ${v.seatId} and tenant_id = app.tenant_id() and status = 'active'`;
-    if (!seat) throw new ActionError('That seat is not active.');
-    await tx`update standing_seats set effective = daterange(lower(effective), ${v.effectiveFrom}::date)
-             where member_id = ${v.memberId} and tenant_id = app.tenant_id()
-               and lower(effective) < ${v.effectiveFrom}::date
-               and (upper_inf(effective) or upper(effective) > ${v.effectiveFrom}::date)`;
-    // Composite foreign keys keep the member, seat and platoon inside this department.
-    await tx`insert into standing_seats (tenant_id, member_id, seat_id, platoon_shift_id, kelly_group, effective)
-             values (app.tenant_id(), ${v.memberId}, ${v.seatId}, ${v.platoonShiftId}, ${v.kellyGroup ?? null},
-                     daterange(${v.effectiveFrom}::date, null))`;
-    return `Standing seat saved from ${v.effectiveFrom}`;
+    const r = await changeStandingSeat(tx, parsed.data);
+    return `Standing seat saved from ${parsed.data.effectiveFrom}` + (r.superseded ? `; ${r.superseded} future generated shifts withdrawn — regenerate the schedule.` : '');
   });
 }
 

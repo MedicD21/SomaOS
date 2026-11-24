@@ -2,6 +2,7 @@ import 'server-only';
 import type { IsoDate, ShiftPattern } from '@soma/schedule-engine';
 import { ActionError } from '@/server/errors';
 import type { Tx } from '@/server/db';
+import { supersedeGenerated } from './generate';
 
 /** Generation assumes one pattern key per department. */
 export const PATTERN_KIND = 'schedule.pattern';
@@ -53,7 +54,7 @@ export async function savePatternDraft(tx: Tx, payload: ShiftPattern): Promise<n
 
 /**
  * Approves draft `version` from local midnight of `effectiveDate` (tenant timezone): closes the
- * current approved version at that instant and cancels generated, still-scheduled shifts that
+ * current approved version at that instant and supersedes generated, still-scheduled shifts that
  * start on or after that local date (they follow the old pattern; regeneration recreates them).
  * Caller must hold admin.config.manage and department-wide scheduling.roster.edit.
  */
@@ -62,7 +63,7 @@ export async function approvePatternDraft(
   version: number,
   effectiveDate: IsoDate,
   today: IsoDate,
-): Promise<{ cancelled: number }> {
+): Promise<{ superseded: number }> {
   const [draft] = await tx<{ id: string }[]>`
     select id from config_versions
     where tenant_id = app.tenant_id() and kind = ${PATTERN_KIND} and key = ${PATTERN_KEY}
@@ -90,14 +91,5 @@ export async function approvePatternDraft(
   await tx`update config_versions set status = 'approved', effective = tstzrange(${effectiveDate}::timestamp at time zone ${tz}, null)
            where id = ${draft.id}`;
 
-  const cancelled = await tx`
-    update shift_assignments a
-    set status = 'cancelled', cancelled_reason = 'Pattern version ' || coalesce(a.pattern_version::text, '?') || ' replaced'
-    where a.tenant_id = app.tenant_id() and a.source = 'generated' and a.status = 'scheduled'
-      and lower(a.during) > now()
-      and (lower(a.during) at time zone coalesce(
-            (select ou.timezone from seats s join org_units ou on ou.id = s.org_unit_id where s.id = a.seat_id), ${tz}))::date
-          >= ${effectiveDate}::date
-    returning a.id`;
-  return { cancelled: cancelled.length };
+  return { superseded: await supersedeGenerated(tx, effectiveDate, { reason: null }) };
 }
