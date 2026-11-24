@@ -7,15 +7,17 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
-    "lint": "eslint src e2e",
+    "lint": "eslint src e2e tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --exclude tests/db/**",
+    "test:db": "vitest run tests/db",
     "e2e": "playwright test --trace off"
   },
   "dependencies": {
     "@soma/auth": "workspace:*",
     "@soma/config-core": "workspace:*",
     "@soma/custom-fields": "workspace:*",
+    "@soma/schedule-engine": "workspace:*",
     "@soma/validators": "workspace:*",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.2",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "1.63.0",
+    "@soma/db": "workspace:*",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",

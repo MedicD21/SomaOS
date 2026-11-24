@@ -15,6 +15,9 @@ export function friendlyDbError(e: unknown): string {
   if (/cannot remove last admin/.test(msg)) return 'cannot remove last admin: the department must keep at least one department-wide admin.';
   if (/duplicate key/.test(msg)) return 'That key or name is already in use.';
   if (/member_assignments_no_overlap/.test(msg)) return 'That member already has a primary assignment for those dates.';
+  if (/shift_assignments_seat_no_overlap/.test(msg)) return 'That seat is already filled for that time.';
+  if (/shift_assignments_member_no_overlap/.test(msg)) return 'That member is already scheduled during that time.';
+  if (/standing_seats_member_no_overlap/.test(msg)) return 'That member already has a regular seat for those dates.';
   if (/row-level security|permission denied/.test(msg)) return 'You do not have permission to make that change.';
   if (/unknown timezone/.test(msg)) return 'Unknown time zone.';
   console.error(e);
