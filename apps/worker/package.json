@@ -9,9 +9,10 @@
     "lint": "eslint src tests",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run tests/unit",
-    "test:db": "vitest run tests/db"
+    "test:db": "vitest run tests/db --no-file-parallelism"
   },
   "dependencies": {
+    "@soma/schedule-engine": "workspace:*",
     "@supabase/supabase-js": "^2.119.2",
     "nodemailer": "^10.6.1",
     "postgres": "^4.1.1",

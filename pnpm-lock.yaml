@@ -114,6 +114,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@soma/schedule-engine':
+        specifier: workspace:*
+        version: link:../../packages/schedule-engine
       '@supabase/supabase-js':
         specifier: ^2.119.2
         version: 2.119.2
