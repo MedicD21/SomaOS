@@ -1,7 +1,7 @@
 # SomaOS — Master Design
 
 **Date:** 2026-11-24
-**Status:** Draft for owner approval
+**Status:** Approved by owner 2026-11-24 (calls in §12 accepted; owner decisions recorded there)
 **Research basis:** `docs/research/01–05` (each claim there is tagged confirmed / secondary / unverified; items marked unverified must be checked against primary sources before the module that depends on them ships).
 
 ---
@@ -73,19 +73,19 @@ Calls marked **(owner)** were decided by the owner; everything else is **(builde
 | Language | TypeScript (strict) **(owner)** | One language across web, API, mobile, shared rule engines. |
 | Monorepo | pnpm workspaces + Turborepo | Standard, fast, caches builds. |
 | Web app | Next.js (App Router) + React + Tailwind + an accessible component kit (shadcn/ui on Radix) | Accessibility (WCAG 2.1 AA) built on Radix primitives. |
-| API | Node service (Fastify) exposing tRPC for first-party clients + versioned REST/OpenAPI for public API & webhooks | Type-safe internal calls; open API is a differentiator (research 05). |
-| Database | PostgreSQL 16+ **(owner: Postgres)** | RLS, JSONB, range types (`tstzrange`) and exclusion constraints suit scheduling. |
+| API | Next.js server (route handlers + server actions) for first-party use in Phases 0–1; domain logic lives in framework-free packages so a versioned REST/OpenAPI public API (and a separate API service if needed) can be added later | Fewer moving parts for a small team; open API is still a differentiator (research 05). |
+| Database / Auth / Storage | **Supabase (owner)**: Postgres 15+ with RLS, Supabase Auth (email+password, TOTP MFA, later SAML SSO), Supabase Storage. Local dev via Supabase CLI. | Owner wants own sign-in on Supabase/Neon; Supabase bundles DB+auth+storage, RLS integrates with auth JWT claims, PowerSync has first-class Supabase support, BAA available on paid plans (research 05). |
 | ORM / migrations | Drizzle ORM + SQL migrations | Close to SQL; RLS policies and constraints live in migrations. |
-| Auth | Better Auth (or equivalent) with organizations, passkeys, TOTP MFA, SAML/OIDC SSO (Entra ID), later SCIM | Municipal SSO is common; passkeys help volunteers. Verify library maturity at planning time. |
+| Auth details | Supabase Auth; tenant membership and roles kept in our own tables; a custom access-token hook adds `tenant_id` to the JWT for RLS; MFA enforced for admin roles | Keeps authorization in our data model, not the auth provider. |
 | Mobile | Expo (React Native, new architecture) **(owner)** | iOS + Android + tablets from one codebase. |
 | Offline sync | PowerSync (Postgres → device SQLite, upload queue to our API) | Research 05: Sync Streams GA, HIPAA-capable cloud, self-host option. Alternatives noted: ElectricSQL. WatermelonDB and Zero rejected (maintenance / no offline). |
 | Background jobs | pg-boss (Postgres-backed queue) | No extra infrastructure; used for accrual runs, alerts, exports, state/NERIS submission queues. |
-| Files | S3-compatible object storage (MinIO in dev) with server-side encryption; signed URLs | Documents, attachments, signed PDFs. |
+| Files | Supabase Storage (S3-compatible) with per-tenant path prefixes and storage RLS; signed URLs | Documents, attachments, signed PDFs. |
 | Search | Postgres full-text search initially | Defer a search engine until needed. |
 | PDF | Server-side PDF generation + PAdES sealing with RFC 3161 timestamp at finalization | Research 04: tamper-evident signed records. |
 | Validation | Zod schemas shared by web, API, mobile | One source of truth for config and payload shape. |
 | Testing | Vitest (unit, engines), Playwright (web E2E), DB tests for RLS policies | Rule engines must be exhaustively tested. |
-| Local dev | Docker Compose: Postgres, MinIO, PowerSync service, mail catcher | One-command local stack. |
+| Local dev | Supabase CLI local stack (Postgres, Auth, Storage, mail catcher); PowerSync added when mobile starts | One-command local stack. |
 | Hosting (later) | A HIPAA-eligible cloud with a BAA (e.g., AWS) | Decided before first external customer. |
 
 ### 5.2 Repository layout
@@ -93,8 +93,7 @@ Calls marked **(owner)** were decided by the owner; everything else is **(builde
 ```
 SomaOS/
   apps/
-    web/              Next.js admin + member web app
-    api/              Fastify: tRPC, REST/OpenAPI, PowerSync upload endpoint, webhooks
+    web/              Next.js web app (UI + server routes/actions; later PowerSync upload endpoint)
     mobile/           Expo app (offline-first)
     worker/           pg-boss job runners (accruals, alerts, exports, submissions)
   packages/
@@ -115,7 +114,7 @@ SomaOS/
     adr/              architecture decision records
 ```
 
-Module code inside `apps/api` and `apps/web` is grouped by module (`scheduling/`, `personnel/`, `inventory/`…). Modules talk to each other only through each module's public service interface and domain events, never by reaching into another module's tables.
+Module code inside `apps/web` is grouped by module (`scheduling/`, `personnel/`, `inventory/`…). Modules talk to each other only through each module's public service interface and domain events, never by reaching into another module's tables.
 
 ### 5.3 Tenancy model
 
@@ -186,7 +185,7 @@ Separate dimensions (research 05):
 
 | Phase | Module(s) | Why this order |
 |---|---|---|
-| **0 — Foundation** | Tenancy, auth/SSO/MFA, org structure, people (basic), ranks, roles/permissions, audit, custom fields, config versioning, notifications, file storage, web shell, mobile shell + offline sync skeleton, CI | Everything depends on it. |
+| **0 — Foundation** | Tenancy, auth/MFA, org structure, people (basic), ranks, roles/permissions, audit, custom fields, config versioning, notifications (in-app + email), file storage, responsive web shell, CI. (Mobile app + offline sync move to Phase 3 with rig checks.) | Everything depends on it. |
 | **1 — Scheduling, Time, Leave & Pay** | Detailed in §7. Includes minimal credentials (needed to gate seats). | Owner's #1 pain point. Usable by own department as soon as it ships. |
 | **2 — Personnel & Credentials; Training** | Full member records, credential types/cycles/CE buckets, expiration alerts; training classes, sign-in, CE/ISO/NREMT hour roll-ups, skills/task books, quizzes; later SCORM/xAPI | Feeds scheduling qualifications; ISO/NREMT reporting. |
 | **3 — Inventory, Assets & Fleet; Checks** | Location tree, par levels, lot/expiry, restock, purchasing; apparatus/equipment with standards-driven inspections, work orders, OOS → staffing; daily rig checks (offline) | High daily-use value; prerequisite for ePCR supply decrement. |
@@ -250,7 +249,7 @@ Separate dimensions (research 05):
 ## 9. What's left to the builder (planning-time decisions)
 
 - Exact library versions; confirm Better Auth (or alternative) covers SAML/SCIM needs; PowerSync self-hosted storage requirements.
-- Fastify+tRPC vs Next.js route handlers detail, as long as the public REST API remains separable.
+- Whether to split a standalone API service out of Next.js before the public API phase.
 - UI design system details and navigation, within WCAG 2.1 AA.
 - Exact table design within the concepts above.
 - CI provider (GitHub Actions assumed).
@@ -266,6 +265,19 @@ From the research reports' verification lists — highlights:
 - State retention schedules for the owner's state — Phase 4.
 - FDA software-as-medical-device applicability for dosing calculators — Phase 4.
 
-## 11. Immediate next step
+## 11. Owner decisions (2026-11-24)
+
+1. **Replace, not run alongside:** SomaOS will replace the department's current tools — EMS Manager (scheduling), NinthBrain (training, credentials, documents, SOGs), Frontline (assets, inventory). Therefore each module needs **importers** from these systems and a **reconciliation** step (e.g., leave balances, seniority, OT hours) before cutover, plus a hard payroll-lock workflow in Phase 1.
+2. **Hours and dollars:** SomaOS stores pay rates (per member, effective-dated, HR-sensitive permission) and computes both hours by pay code and dollars, including FLSA regular-rate considerations. Individual rates are entered later.
+3. **Own sign-in on Supabase** (see §5.1).
+4. **Department's real rules** will come from a read-only review of EMS Manager / NinthBrain / Frontline (to be captured in `docs/research/06-current-systems.md`). Phase 1 golden fixtures are built from it.
+
+## 12. Calls accepted by owner
+
+- Phase 1 is a responsive web app (phone-friendly); Expo app + offline sync arrive in Phase 3 with rig checks, then ePCR.
+- Department rules are first loaded from versioned config files (seed), with the no-code rule-builder UI delivered within Phase 1 before any second department.
+- Consortium sharing: schema and RLS designed to allow it; sharing features built later.
+
+## 13. Immediate next step
 
 Write the implementation plan for **Phase 0 (Foundation)**, then a separate plan for **Phase 1 (Scheduling)**. Each later module gets its own design → plan → build cycle.
