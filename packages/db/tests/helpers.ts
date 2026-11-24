@@ -132,3 +132,44 @@ export async function createSeat(tx: Tx, tenantId: string, orgUnitId: string, la
     insert into seats (tenant_id, org_unit_id, label) values (${tenantId}, ${orgUnitId}, ${label}) returning id`;
   return r[0]!.id;
 }
+
+export async function createBank(tx: Tx, tenantId: string, key = 'vacation'): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into leave_banks (tenant_id, key, label) values (${tenantId}, ${key}, ${key}) returning id`;
+  return r[0]!.id;
+}
+
+export async function createLeaveType(tx: Tx, tenantId: string, bankId: string | null, key = 'vacation'): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into leave_types (tenant_id, key, label, bank_id) values (${tenantId}, ${key}, ${key}, ${bankId}) returning id`;
+  return r[0]!.id;
+}
+
+export async function createLeaveRequest(
+  tx: Tx,
+  tenantId: string,
+  memberId: string,
+  typeId: string,
+  start: string,
+  end: string,
+  status: 'pending' | 'approved' | 'denied' | 'cancelled' = 'pending',
+  hours = 24,
+): Promise<string> {
+  const r = await tx<{ id: string }[]>`
+    insert into leave_requests (tenant_id, member_id, leave_type_id, start_date, end_date, hours, status)
+    values (${tenantId}, ${memberId}, ${typeId}, ${start}::date, ${end}::date, ${hours}, ${status}) returning id`;
+  return r[0]!.id;
+}
+
+export async function addLedger(
+  tx: Tx,
+  tenantId: string,
+  memberId: string,
+  bankId: string,
+  kind: 'earn' | 'use' | 'reversal' | 'adjust' | 'expire' | 'payout',
+  hours: number,
+  runKey: string | null = null,
+): Promise<void> {
+  await tx`insert into leave_ledger (tenant_id, member_id, bank_id, kind, hours, effective_date, run_key)
+           values (${tenantId}, ${memberId}, ${bankId}, ${kind}, ${hours}, current_date, ${runKey})`;
+}

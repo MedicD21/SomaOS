@@ -16,6 +16,9 @@ test('in-app notifications show in the bell and can be marked read', async ({ pa
   // Another spec may have switched this user to a different department.
   await sql`update profiles set active_tenant_id = (select id from tenants where slug = 'demo-fire-rescue')
             where user_id = (select id from auth.users where email = 'member@soma.local')`;
+  // Other specs (leave decisions) also notify this member; start from a clean slate.
+  await sql`delete from notifications where member_id in
+            (select m.id from members m join auth.users u on u.id = m.user_id where u.email = 'member@soma.local')`;
   await sql`select app.notify(m.id, 'test', 'Overtime posted for Station 1', 'B shift needs a medic', '/')
             from members m join auth.users u on u.id = m.user_id where u.email = 'member@soma.local'
             and m.tenant_id = (select id from tenants where slug = 'demo-fire-rescue')`;

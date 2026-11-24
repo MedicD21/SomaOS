@@ -116,3 +116,81 @@ inserts the first scan job on start if none is pending.
 Shifts are defined in local wall-clock time; the time zone is the seat's org unit's `timezone`, else the department's.
 Actual hours come from real instants, so a 24-hour shift is 23 h across spring-forward and 25 h across fall-back. A local
 start time that does not exist (02:30 on spring-forward) starts at the next valid instant.
+
+## Leave and accruals (Phase 1b)
+
+Design: master design §7.2. Plan: `docs/superpowers/plans/2026-11-24-phase-1b-leave.md`.
+
+### Concepts
+- **Leave bank** — a balance members draw from (Vacation, Sick, Compensatory time…). **Leave type** — what a member
+  requests (Vacation, FMLA…). A type draws from one bank, or from none (balance-free types such as FMLA are only logged).
+  Both are managed under **Admin → Leave**.
+- **Ledger** — a bank's balance is the sum of `leave_ledger` rows (`earn`, `use`, `reversal`, `adjust`, `expire`,
+  `payout`; signed hours). The ledger is **append-only**: no API role can update, delete or truncate it. Mistakes are
+  fixed with a new `adjust` or `reversal` row. Automated postings carry a `run_key` (unique per member and bank), which is
+  what makes accrual runs idempotent.
+- **Accrual policy** — one `config_versions` document per bank (kind `leave.accrual`, key = bank key), versioned and
+  effective-dated like shift patterns: save a draft, preview it, approve it from a date.
+- **Request** — a date range. Hours debited are the **scheduled wall-clock hours** of the member's scheduled, non-Kelly
+  shifts whose local start date falls in the range (a 24-hour shift counts 24 even across a daylight-saving change).
+  No scheduled shifts in the range means no request.
+
+### Writing leave: only through database functions
+Requests and the ledger have no direct write access. `app.request_leave`, `app.decide_leave`, `app.cancel_leave` and
+`app.adjust_leave` run as the database owner and check the caller **in SQL**:
+
+| Function | Who | Rules |
+|---|---|---|
+| `request_leave` | a member, for themselves (`leave.request`) | lead time; enough balance after other pending requests unless the approved policy has `negativeAllowed` |
+| `decide_leave` | someone with `leave.approve` whose grant covers the member | covers = department scope, or an org-unit subtree containing the member's station, and the grant's shift (if any) matches the member's shift. The member's place is their primary assignment, else their standing seat. **Nobody decides their own leave.** Balance is re-checked at approval. |
+| `cancel_leave` | the member (before it starts) or an approver | approved leave is reversed once and its shifts restored; if a seat was refilled meanwhile it fails and nothing changes |
+| `adjust_leave` | department-wide `leave.manage` | needs a note of at least 5 characters |
+
+Approving cancels the member's scheduled shifts in the range (`cancelled_reason = 'Leave: <type>'`, linked by
+`leave_request_id`), so the roster shows the vacancy; cancelling the leave puts them back.
+
+### Accrual policy reference
+Edit as JSON under **Admin → Leave → Accrual policies** (a guided editor comes in Phase 1e). Example:
+
+```json
+{
+  "period": { "kind": "monthly" },
+  "tiers": [
+    { "fromYears": 0, "earn": { "method": "per_period", "hours": 10 } },
+    { "fromYears": 5, "earn": { "method": "per_period", "hours": 14 } }
+  ],
+  "cap": 200,
+  "waitingPeriodDays": 0,
+  "prorateFirstPeriod": true,
+  "fractionByEmploymentType": { "career_part_time": 0.5 },
+  "negativeAllowed": false,
+  "carryover": { "max": 40, "resetOn": "01-01" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `period` | `monthly`, or `{ "kind": "fixed_days", "days": 14, "anchor": "2026-01-02" }` for pay-period-style blocks |
+| `tiers` | by whole years of service on the last day of the period; the first tier starts at 0 and years must increase |
+| `earn.method` | `per_period` (`hours`), `per_hours_worked` (`perHours`, `earnHours`), `annual_front_load` (`hours`, credited in the period containing Jan 1), or `manual` (never accrues automatically — used for comp time) |
+| `cap` | maximum balance; earning stops there (`null` = none). For comp time, 480 h is the usual public-safety ceiling but it is policy data |
+| `waitingPeriodDays` | nothing accrues until hire date + N days |
+| `prorateFirstPeriod` | scale `per_period` in the hire month by days employed |
+| `fractionByEmploymentType` | e.g. part-time earns half |
+| `negativeAllowed` | whether a request may take the balance below zero |
+| `carryover` | on `resetOn` (MM-DD) hours above `max` expire (`max: null` = carry everything) |
+
+Use **Preview** to see what a sample member would earn, with the reasons, before saving. **Starter values from the
+department template are placeholders**: they are created as drafts and nothing accrues until an administrator edits and
+approves them. Approving needs `leave.manage` and `admin.config.manage`. A policy may be approved from a past date: the
+worker then catches up every completed period since then (up to two years back).
+
+### Worker
+`leave-accrual` runs daily at 06:00 UTC (and is queued when the worker starts). For each approved policy version it posts
+the completed, unposted periods for each active member and applies carryover at each reset date, using the department's
+local date. It uses the version that was effective for each period, skips separated members, and one failing member does
+not stop the others (failures are reported when the run ends).
+
+### Running the tests
+Run `pnpm db:reset` before `pnpm test:db` if you have just run the end-to-end suite: the end-to-end tests generate rosters
+in the demo department, and a few database tests expect a freshly seeded database. CI uses a separate database per job.
