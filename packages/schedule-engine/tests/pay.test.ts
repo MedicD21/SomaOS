@@ -196,7 +196,8 @@ describe('rates, rounding and bad input', () => {
 
   it('names the missing assignment type', () => {
     const r0 = rules();
-    const { detail: _removed, ...rest } = r0.assignments;
+    const rest: Partial<PayRules['assignments']> = { ...r0.assignments };
+    delete rest.detail;
     expect(() => run({ ...r0, assignments: rest as PayRules['assignments'] }, [seg('a', '2026-01-02', 8, 'detail')])).toThrow(
       'Pay rules have no code for assignment type "detail"',
     );
