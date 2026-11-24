@@ -16,7 +16,8 @@
     "db:reset": "supabase db reset && tsx scripts/seed-dev.ts",
     "test:unit": "turbo run test --filter=!@soma/db",
     "test:db": "pnpm -F @soma/db test",
-    "db:seed": "tsx scripts/seed-dev.ts"
+    "db:seed": "tsx scripts/seed-dev.ts",
+    "env:local": "tsx scripts/write-env.ts"
   },
   "devDependencies": {
     "@soma/templates": "workspace:*",

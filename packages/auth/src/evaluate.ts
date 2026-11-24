@@ -94,3 +94,8 @@ export function toGrants(rows: MyGrantRow[]): Grant[] {
   }
   return grants;
 }
+
+/** Spec §5.5: MFA is required for anyone holding an admin permission. */
+export function requiresMfa(grants: Grant[]): boolean {
+  return grants.some((g) => g.permission.startsWith('admin.'));
+}

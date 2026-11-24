@@ -88,3 +88,12 @@ describe('toGrants', () => {
     ]);
   });
 });
+
+describe('requiresMfa', () => {
+  it('is true when any active grant carries an admin.* permission', async () => {
+    const { requiresMfa } = await import('../src/evaluate');
+    expect(requiresMfa([grant({ permission: 'files.view' })])).toBe(false);
+    expect(requiresMfa([grant({ permission: 'files.view' }), grant({ permission: 'admin.audit.view' })])).toBe(true);
+    expect(requiresMfa([])).toBe(false);
+  });
+});
