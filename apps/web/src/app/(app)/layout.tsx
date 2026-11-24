@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { NotificationBell } from '@/components/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getRequestContext } from '@/server/context';
 import { visibleNav } from '@/server/nav';
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {ctx.tenant.name}
           </span>
           <div className="ml-auto flex flex-wrap items-end gap-2">
+            <NotificationBell unread={ctx.unreadNotifications} />
             {ctx.memberships.length > 1 && (
               <form action={switchTenant} className="flex items-end gap-2">
                 <label htmlFor="tenantId" className="text-sm">

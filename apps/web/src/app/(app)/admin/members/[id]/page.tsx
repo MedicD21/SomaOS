@@ -7,6 +7,7 @@ import { loadFieldDefs } from '@/server/custom-fields';
 import { updateMember } from '../actions';
 import { MemberForm } from '../member-form';
 import { AssignmentForm } from './assignment-form';
+import { InviteForm } from './invite-form';
 
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +18,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const canManage = hasAny(ctx, 'admin.members.manage');
   const data = await withCtxDb(ctx, async (tx) => {
     const [m] = await tx`
-      select id, first_name, last_name, preferred_name, employee_number, email, phone, rank_id, employment_type,
+      select id, user_id, first_name, last_name, preferred_name, employee_number, email, phone, rank_id, employment_type,
              to_char(hire_date, 'YYYY-MM-DD') as hire_date, to_char(seniority_date, 'YYYY-MM-DD') as seniority_date, status, custom
       from members where id = ${id}`;
     return {
@@ -54,6 +55,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           <dl className="grid grid-cols-2 gap-2 text-sm"><dt>Employee #</dt><dd>{m.employee_number ?? '—'}</dd><dt>Email</dt><dd>{m.email ?? '—'}</dd></dl>
         )}
       </Card>
+      {canManage && !m.user_id && m.email && (
+        <Card title="Sign-in access"><InviteForm memberId={id} email={m.email} /></Card>
+      )}
       <Card title="Assignments">
         <table className="mb-4 w-full text-left text-sm">
           <thead><tr><th scope="col" className="py-2">{t(ctx, 'station', 'Station')} / unit</th><th scope="col">{t(ctx, 'shift', 'Shift')}</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Primary</th></tr></thead>

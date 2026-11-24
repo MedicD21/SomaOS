@@ -19,5 +19,5 @@ const out = [
   '',
 ].join('\n');
 writeFileSync('apps/web/.env.local', out);
-writeFileSync('apps/worker/.env.local', out);
+writeFileSync('apps/worker/.env.local', `${out}SUPABASE_SERVICE_ROLE_KEY=${env.SERVICE_ROLE_KEY}\nAPP_URL=http://localhost:3000\n`);
 console.log('wrote apps/web/.env.local and apps/worker/.env.local');

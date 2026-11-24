@@ -22,6 +22,7 @@ export type RequestContext = {
   memberId: string | null;
   grants: Grant[];
   memberships: { id: string; name: string }[];
+  unreadNotifications: number;
   aal: 'aal1' | 'aal2';
 };
 
@@ -43,7 +44,7 @@ export const getClaims = cache(async (): Promise<DbClaims | null> => {
 export const getRequestContext = cache(async (): Promise<RequestContext> => {
   const claims = await getClaims();
   if (!claims) redirect('/login');
-  if (!claims.tenant_id) redirect('/no-department');
+  if (!claims.tenant_id) redirect('/auth/accept');
 
   const data = await withUserDb(claims, async (tx) => {
     const [tenant] = await tx<{ id: string; name: string; timezone: string; terminology: Record<string, string>; enabled_modules: string[] }[]>`
@@ -54,7 +55,8 @@ export const getRequestContext = cache(async (): Promise<RequestContext> => {
     const memberships = await tx<{ id: string; name: string }[]>`
       select t.id, t.name from memberships m join tenants t on t.id = m.tenant_id
       where m.user_id = auth.uid() and m.status = 'active' order by t.name`;
-    return { tenant, grantRows, memberId: me?.id ?? null, memberships: [...memberships] };
+    const [unread] = await tx<{ n: number }[]>`select count(*)::int as n from notifications where read_at is null`;
+    return { tenant, grantRows, memberId: me?.id ?? null, memberships: [...memberships], unread: unread?.n ?? 0 };
   });
   if (!data.tenant) redirect('/no-department');
 
@@ -75,6 +77,7 @@ export const getRequestContext = cache(async (): Promise<RequestContext> => {
     memberId: data.memberId,
     grants,
     memberships: data.memberships,
+    unreadNotifications: data.unread,
     aal,
   };
 });

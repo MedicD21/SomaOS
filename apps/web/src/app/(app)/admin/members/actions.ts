@@ -77,3 +77,10 @@ export async function addAssignment(memberId: string, _prev: ActionResult, form:
 export async function openMember(form: FormData): Promise<void> {
   redirect(`/admin/members/${String(form.get('id'))}`);
 }
+
+export async function sendInvite(memberId: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  return runAdmin('admin.members.manage', form, async (tx) => {
+    await tx`select app.enqueue_invite(${memberId})`;
+    return 'Invitation queued — it will be emailed shortly.';
+  });
+}
