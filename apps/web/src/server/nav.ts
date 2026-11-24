@@ -8,6 +8,7 @@ export type NavItem = { href: string; label: string; module: string; anyOf?: Per
 /** Navigation registry. Modules append entries as they ship. */
 export const NAV: NavItem[] = [
   { href: '/', label: 'Dashboard', module: 'core' },
+  { href: '/schedule', label: 'My schedule', module: 'scheduling' },
   { href: '/roster', label: 'Roster', module: 'scheduling', anyOf: ['scheduling.roster.view'] },
   {
     href: '/admin',
