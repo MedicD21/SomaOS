@@ -17,7 +17,7 @@ const result = (over: Partial<PayResult> = {}): PayResult => ({
 const row = (over: Partial<MemberPayRow> = {}): MemberPayRow => ({
   memberId: 'm1', name: 'Medic, Riley', employeeNumber: '1042', groupKey: 'default', rate: 31.25, result: result(), problem: null, notes: [], ...over,
 });
-const period = (rows: MemberPayRow[]): PayPeriodResult => ({ period: { start: '2026-01-01', endExclusive: '2026-01-29' }, rows });
+const period = (rows: MemberPayRow[]): PayPeriodResult => ({ period: { start: '2026-01-01', endExclusive: '2026-01-29' }, rows, closed: null });
 const codes = new Map([['reg', 'REG'], ['ot', 'OT'], ['comp_time', null]]);
 
 describe('payCsv', () => {

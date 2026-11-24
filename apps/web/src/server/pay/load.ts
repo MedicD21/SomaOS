@@ -24,7 +24,14 @@ export type MemberPayRow = {
   notes: string[];
 };
 
-export type PayPeriodResult = { period: Period; rows: MemberPayRow[] };
+export type ClosedInfo = { id: string; closedAt: string; closedBy: string | null };
+
+export type PayPeriodResult = {
+  period: Period;
+  rows: MemberPayRow[];
+  /** Set when the period is closed: the rows are the frozen snapshot, not a recalculation. */
+  closed: ClosedInfo | null;
+};
 
 /** The pay period containing `date` under the group's approved rules, or null when none are approved. */
 export async function payPeriodFor(tx: Tx, date: IsoDate, groupKey = 'default'): Promise<Period | null> {
@@ -45,12 +52,29 @@ type ShiftRow = {
 };
 
 /**
- * Hours and dollars by pay code for every member in one pay period, from scheduled shifts and
- * approved leave, using the pay rules approved for each member's group on the period's first day.
+ * A pay period as payroll sees it: the frozen snapshot when the period is closed (so later changes to
+ * rules, rates or the roster cannot move closed numbers), otherwise a fresh calculation.
+ */
+export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodResult> {
+  const [can] = await tx<{ ok: boolean }[]>`select app.can_view_pay() as ok`;
+  if (!can?.ok) throw new ActionError('Not allowed: pay.view required.');
+  const [closed] = await tx<{ id: string; snapshot: PayPeriodResult; closed_at: string; closed_by_name: string | null }[]>`
+    select c.id, c.snapshot, c.closed_at::text, (select m.last_name || ', ' || m.first_name from members m where m.user_id = c.closed_by and m.tenant_id = c.tenant_id) as closed_by_name
+    from pay_period_closes c
+    where c.status = 'closed' and c.period_start = ${period.start}::date and c.period_end = ${period.endExclusive}::date`;
+  if (closed) {
+    return { period, rows: closed.snapshot.rows, closed: { id: closed.id, closedAt: closed.closed_at, closedBy: closed.closed_by_name } };
+  }
+  return calculatePayPeriod(tx, period);
+}
+
+/**
+ * Hours and dollars by pay code for every member in one pay period, from scheduled shifts, recorded
+ * time entries and approved leave, using the pay rules approved for each member's group on the period's first day.
  * Runs as the signed-in user (RLS applies) and needs department-wide pay.view. Rules take effect at
  * the start of the pay period and a member's rate is the one in force on that day.
  */
-export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodResult> {
+export async function calculatePayPeriod(tx: Tx, period: Period): Promise<PayPeriodResult> {
   const [can] = await tx<{ ok: boolean }[]>`select app.can_view_pay() as ok`;
   if (!can?.ok) throw new ActionError('Not allowed: pay.view required.');
 
@@ -96,6 +120,14 @@ export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodRe
           and (lower(a.during) at time zone z.tz)::date < ${period.endExclusive}::date`
     : [];
 
+  const timeEntries = usable.length && ids.length
+    ? await tx<{ member_id: string; id: string; type: string; date: string; hours: number }[]>`
+        select member_id, id, type, work_date::text as date, hours::float8 as hours
+        from time_entries
+        where status = 'active' and member_id = any(${ids})
+          and work_date >= ${loadFrom}::date and work_date < ${period.endExclusive}::date`
+    : [];
+
   const rates = new Map(
     (await tx<{ member_id: string; rate: number }[]>`
       select member_id, hourly_rate::float8 as rate from member_pay_rates
@@ -128,6 +160,11 @@ export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodRe
         }
       }
     }
+    for (const e of timeEntries) {
+      if (e.member_id === m.id && (WORK_TYPES as readonly string[]).includes(e.type)) {
+        segments.push({ id: `time:${e.id}`, date: e.date, hours: e.hours, type: e.type as WorkType });
+      }
+    }
     const result = computePay({
       rules: found.rules,
       hourlyRate: base.rate,
@@ -139,5 +176,5 @@ export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodRe
     return { ...base, result, problem: null };
   });
 
-  return { period, rows };
+  return { period, rows, closed: null };
 }

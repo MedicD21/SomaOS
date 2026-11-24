@@ -11,6 +11,7 @@ export const NAV: NavItem[] = [
   { href: '/schedule', label: 'My schedule', module: 'scheduling' },
   { href: '/roster', label: 'Roster', module: 'scheduling', anyOf: ['scheduling.roster.view'] },
   { href: '/pay', label: 'Pay', module: 'pay', anyOf: ['pay.view', 'pay.manage'] },
+  { href: '/time', label: 'Time', module: 'pay', anyOf: ['scheduling.roster.edit', 'pay.manage'] },
   { href: '/leave', label: 'My leave', module: 'leave', anyOf: ['leave.request'] },
   { href: '/leave/approvals', label: 'Leave approvals', module: 'leave', anyOf: ['leave.approve'] },
   {
