@@ -5,7 +5,7 @@ import type { Tx } from './db';
 
 export type FieldDefRow = CustomFieldDef & { id: string; sensitivity: string | null };
 
-export async function loadFieldDefs(tx: Tx, entity: 'member' | 'org_unit', includeArchived = false): Promise<FieldDefRow[]> {
+export async function loadFieldDefs(tx: Tx, entity: 'member' | 'org_unit' | 'asset', includeArchived = false): Promise<FieldDefRow[]> {
   const rows = await tx<{ id: string; key: string; label: string; type: CustomFieldDef['type']; options: CustomFieldDef['options'] | null; required: boolean; sensitivity: string | null; archived: boolean }[]>`
     select id, key, label, type, options, required, sensitivity, archived_at is not null as archived
     from custom_field_defs where entity = ${entity} and (${includeArchived} or archived_at is null)

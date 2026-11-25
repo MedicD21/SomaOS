@@ -58,4 +58,25 @@ describe('scheduling templates', () => {
     expect(roles.external).not.toContain('scheduling.openshift.claim');
     expect(roles.company_officer).not.toContain('scheduling.config.manage');
   });
+
+  it('inventory permissions land on the intended roles and the starter pack is complete', () => {
+    const roles = Object.fromEntries(TEMPLATES['career-3-platoon'].roles.map((r) => [r.key, r.permissions]));
+    for (const p of ['inventory.asset.view', 'inventory.check.perform', 'inventory.stock.view', 'inventory.stock.use']) expect(roles.member).toContain(p);
+    for (const p of ['inventory.asset.manage', 'inventory.asset.event', 'inventory.check.manage', 'inventory.stock.manage']) expect(roles.member).not.toContain(p);
+    expect(roles.company_officer).toContain('inventory.asset.event');
+    expect(roles.company_officer).not.toContain('inventory.stock.manage');
+    for (const k of ['logistics_officer', 'fleet_maintenance']) expect(roles[k]).toEqual(expect.arrayContaining(['inventory.asset.manage', 'inventory.stock.manage', 'inventory.check.manage']));
+    expect(roles.auditor).toEqual(expect.arrayContaining(['inventory.asset.view', 'inventory.stock.view']));
+    expect(roles.auditor).not.toContain('inventory.check.perform');
+    expect(roles.external).toEqual([]);
+    for (const t of [TEMPLATES['career-3-platoon'], TEMPLATES.volunteer]) {
+      expect(t.enabledModules).toContain('inventory');
+      expect(t.inventory.assetTypes.map((a) => a.key)).toEqual(expect.arrayContaining(['apparatus', 'cardiac_monitor', 'cot', 'ballistic_vest', 'turnout_gear', 'equipment']));
+      expect(t.inventory.checklists.map((c) => c.key)).toEqual(['daily_truck_check', 'drug_inventory']);
+      for (const c of t.inventory.checklists) {
+        expect(new Set(c.items.map((i) => i.key)).size).toBe(c.items.length);
+        expect(c.items.length).toBeGreaterThan(0);
+      }
+    }
+  });
 });
