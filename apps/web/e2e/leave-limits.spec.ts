@@ -111,6 +111,11 @@ test('admin sets a leave limit; approvals show it, a plain approver is stopped, 
   await tessItem.getByRole('button', { name: /^Approve/ }).click();
   await expect(page.getByText('No requests are waiting for you.')).toBeVisible();
 
+  // Leave the demo member's balance and roster as other specs expect them (Riley's approved leave debited 24 h).
+  await sql`delete from leave_ledger where request_id in (select id from leave_requests where member_id in (${riley!.id}, ${sam}, ${tess}) and start_date = ${d!.d}::date)`;
+  await sql`delete from shift_assignments where leave_request_id in (select id from leave_requests where member_id in (${riley!.id}, ${sam}, ${tess}) and start_date = ${d!.d}::date)`;
+  await sql`delete from leave_requests where member_id in (${riley!.id}, ${sam}, ${tess}) and start_date = ${d!.d}::date`;
+
   // 6. Phone layout.
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, 'lim-manager@soma.local');
