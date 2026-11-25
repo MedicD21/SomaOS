@@ -34,18 +34,18 @@ const one = async <R extends Record<string, unknown>>(rows: Promise<R[]>): Promi
 
 /** A published document version, built as a superuser (the document module has its own tests). */
 async function publishedDoc(tx: Tx, t: string, opts: { ack?: boolean; label?: string; doc?: string; major?: boolean } = {}) {
-  let doc = opts.doc;
+  let doc: string = opts.doc ?? '';
   if (!doc) {
     const [f] = await tx<{ id: string }[]>`insert into document_folders (tenant_id, name) values (${t}, ${'F' + crypto.randomUUID().slice(0, 5)}) returning id`;
-    [{ id: doc }] = await tx<{ id: string }[]>`insert into documents (tenant_id, folder_id, kind, title, requires_ack) values (${t}, ${f!.id}, 'sog', 'Vehicle Fires', ${opts.ack ?? true}) returning id`;
+    doc = (await tx<{ id: string }[]>`insert into documents (tenant_id, folder_id, kind, title, requires_ack) values (${t}, ${f!.id}, 'sog', 'Vehicle Fires', ${opts.ack ?? true}) returning id`)[0]!.id;
   }
   const vid = crypto.randomUUID();
   const [att] = await tx<{ id: string }[]>`
     insert into attachments (tenant_id, entity, entity_id, object_path, file_name, mime_type, size_bytes, sha256)
     values (${t}, 'document_version', ${vid}, ${`${t}/document_version/${vid}/x.pdf`}, 'x.pdf', 'application/pdf', 1, 'a') returning id`;
-  const [{ n }] = await tx<{ n: number }[]>`select coalesce(max(version_no), 0) + 1 as n from document_versions where document_id = ${doc}`;
+  const n = (await tx<{ n: number }[]>`select coalesce(max(version_no), 0) + 1 as n from document_versions where document_id = ${doc}`)[0]!.n;
   await tx`insert into document_versions (id, tenant_id, document_id, version_no, label, attachment_id) values (${vid}, ${t}, ${doc}, ${n}, ${opts.label ?? '1.0'}, ${att!.id})`;
-  return { doc: doc!, version: vid };
+  return { doc, version: vid };
 }
 
 async function assign(tx: Tx, w: Awaited<ReturnType<typeof world>>, version: string, audience: object = { all: true }, due: string | null = null, typed = false) {
