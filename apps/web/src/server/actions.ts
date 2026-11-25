@@ -15,6 +15,10 @@ export const IDLE: ActionResult = { ok: null, message: null };
 const LEAVE_MESSAGES =
   /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero|leave limit:|an override reason|not allowed: overriding a leave limit)/i;
 
+/** Plain-English messages raised by the asset, checklist and inventory functions. */
+const INVENTORY_MESSAGES =
+  /^(Enter a (name|quantity|change)|Unknown (or archived asset type|location|asset|item|parent|station|checklist|asset type|checklist item|asset field)|Missing required asset field|This asset|The asset is already|Choose a (status|location|new location)|Explain (why|the adjustment)|Add a note|Retire the asset|Answer (every|pass)|Enter (a number|text)|This checklist|Checklist items|Invalid checklist key|Not enough stock|Choose two different|That (item|location) is archived|Par must|Asset added|not allowed: (you cannot|inventory))/i;
+
 const TIME_MESSAGES =
   /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period|that is not one of|that shift was not found|choose a shift|only upcoming|one of those shifts|that member has separated|only the member asked|this trade|that trade|only the members in|not in your scope|an override reason|overriding needs|that seat is not available|open shifts can only|the end must be after|only upcoming times|an open shift can be|explain the open shift|explain the cancellation|that open shift is|that seat is already filled|that seat and time is already|you are already scheduled|you already have a claim|only the member who claimed|this claim is|unknown open shift|unknown claim)/i;
 
@@ -37,7 +41,7 @@ export function friendlyDbError(e: unknown): string {
   if (/member_pay_rates_member_no_overlap/.test(msg)) return 'That rate overlaps another rate for the same member. Choose a later start date.';
   if (/leave_requests_member_no_overlap/.test(msg)) return 'You already have leave requested for some of those dates.';
   // The leave functions raise plain-English messages meant for people; pass them through.
-  if (TIME_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
+  if (TIME_MESSAGES.test(msg) || INVENTORY_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (DOC_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';

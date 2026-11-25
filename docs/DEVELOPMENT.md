@@ -332,6 +332,7 @@ Plan: `docs/superpowers/plans/2026-11-24-phase-1d-trades.md`. Page: `/trades`.
   assignments and the trade.
 - **Afterwards:** swapped shifts become type `trade` (paid by the pay rules' `trade` mapping) with a line in their
   explain trail; both members are notified at each step.
+- **Known limit:** the "Their shift" list shows the next 60 days of other members' shifts, capped at 2000 rows (a 150-member department can exceed that); a picker that filters by member or date is the follow-up.
 - **Not yet:** hours-owed/payback trades, one-way give-aways and open vacancy fill with call-back lists (1d-2), leave
   limits per shift or station (1d-3), per-member trade limits.
 - **Existing departments:** the new permission is in the starter roles; a department created earlier must add
@@ -355,6 +356,53 @@ Plan: `docs/superpowers/plans/2026-11-25-phase-1d2-open-shifts.md`. Page: `/open
 - **Visibility:** open shifts are visible to claim-permission holders and to officers of the seat's unit; claims to the claimant and those officers.
 - **Not yet:** call-back lists and mandatory hold-over ordering, special pay rules for open shifts, leave limits (1d-3).
 - **Existing departments:** add `scheduling.openshift.claim` to their member roles (Admin → Roles).
+
+## Assets, checklists and inventory (Phase 3a)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-3a-assets-inventory.md`. Module key `inventory` (Admin → Settings). Pages:
+`/assets`, `/checks`, `/inventory`; admin: Asset types, Checklists, Items and locations, and Custom fields → Asset fields.
+
+### Who can do what
+- **Reads are department-wide** for holders of `inventory.asset.view` / `inventory.stock.view` (every station's assets and
+  stock are visible); **writes are scoped to the location's org unit** and checked in SQL. A stock location with no station
+  inherits its nearest ancestor's; with none, department-wide permission is needed. Moving an asset needs the permission at
+  both stations. Members choose their station from the full list when recording a check or stock movement.
+- Permissions: `inventory.asset.{view,manage,event}`, `inventory.check.{perform,manage}`, `inventory.stock.{view,use,manage}`.
+  Members get view/perform/use; officers add `asset.event`; Logistics and Fleet roles manage; the Auditor reads.
+- Existing departments created before this need these permissions added to their roles and the module turned on.
+
+### Data model and rules
+- **Assets:** typed (`asset_types`, archived never deleted), status `in_service | out_of_service | reserve | maintenance | retired`,
+  location = an org unit, custom fields from the `asset` registry (validated: known, unarchived, required present).
+  `assets.status` and location change only inside `app.record_asset_event`, which writes the `asset_events` row in the
+  same transaction. `out_of_service` and `retired` need a reason; `retired` is terminal (notes only) and must precede archiving.
+  **A failed check never changes status**: people set the truck in or out of service.
+- **Checklists:** versioned JSON items (`pass_fail | number | text`, required or optional). Every save is a new version and
+  the old one stops accepting completions; a completion stores a snapshot of the version it answered, so history never
+  changes. Completions are by the caller's own member, append-only, and log one `check` event on the asset.
+  Starter: **Daily Truck Check** (generic) and **Drug Inventory** — a seal/count verification checklist only; chain of custody,
+  witnessed waste and discrepancies for controlled substances are Phase 3b.
+- **Inventory:** items, a tree of stock locations (`storeroom, station, apparatus, compartment, container`), par levels, and
+  an append-only `stock_ledger` of signed deltas (`receive, use, adjust, transfer_out, transfer_in`). On-hand is the view
+  `stock_levels` (no cached balance); `low_stock` lists pairs below par (`critical` at or below the minimum). Stock can never
+  go below zero (refused, not clamped); adjustments need a reason; transfers write two rows with one `transfer_id` and take
+  advisory locks so two racing transfers of the last units cannot both succeed.
+- `asset_events`, `checklist_completions` and `stock_ledger` raise on update, delete and truncate (`app.forbid_mutation`),
+  even for the table owner. Fix mistakes with a compensating entry.
+- **Starter pack** (editable, applied with the department template): asset types Apparatus, Cardiac monitor, Cot, Ballistic
+  vest, Turnout gear, Equipment; asset fields serial number, size, issue and expiration dates, assigned to; two checklists;
+  a few supplies and a Main storeroom. All values are examples.
+- **3b hooks (not built):** ledger rows carry `witnessed_by`, `lot_id`, `signature_id` and `reference`; `items.is_controlled`
+  exists but a check pins it false; `stock_locations.kind` reserves `container`; checklist completions can reference a stock
+  location. Controlled substances will get their own ledger rather than relaxing these rules.
+
+### Tests
+`pnpm -F @soma/db test` (`assets`, `checklists`, `inventory` incl. a two-connection race), `pnpm -F @soma/web test:db`
+(`inventory-servers`), `pnpm -F @soma/web e2e e2e/inventory.spec.ts`.
+
+### Not yet
+Lots and expiry, purchasing, barcode scanning, photos on checks, work orders and maintenance schedules, auto out-of-service
+from failed checks, per-member issued gear, mobile/offline entry.
 
 ## Leave limits (Phase 1d-3)
 

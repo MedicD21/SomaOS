@@ -53,7 +53,7 @@ export async function loadUpcomingShifts(tx: Tx, scope: 'mine' | 'others', days 
       and not exists (select 1 from shift_trades x where x.status in ('awaiting_member', 'awaiting_approval')
                       and a.id in (x.requester_assignment_id, x.counterparty_assignment_id))
     order by lower(a.during), m.last_name
-    limit 300`;
+    limit 2000`;
   return rows.map(shiftOf);
 }
 

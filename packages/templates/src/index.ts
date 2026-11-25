@@ -9,6 +9,8 @@ export type { LeaveTemplate } from './leave';
 export type { PayTemplate } from './pay';
 export type { DocumentsTemplate, FormTemplate } from './documents';
 export { STARTER_DOCUMENTS } from './documents';
+export { STARTER_INVENTORY } from './inventory';
+export type { InventoryTemplate, ChecklistItemTemplate } from './inventory';
 
 export const TEMPLATES = {
   'career-3-platoon': career3Platoon,

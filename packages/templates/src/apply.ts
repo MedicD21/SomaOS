@@ -94,6 +94,32 @@ export async function applyTemplate(
                     ${f.approval}, 'published', now()
              where not exists (select 1 from form_definitions where tenant_id = ${tenantId} and key = ${f.key})`;
   }
+  const inv = template.inventory;
+  for (const t of inv.assetTypes) {
+    await tx`insert into asset_types (tenant_id, key, label, category) values (${tenantId}, ${t.key}, ${t.label}, ${t.category})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  for (const [i, f] of inv.assetFields.entries()) {
+    await tx`insert into custom_field_defs (tenant_id, entity, key, label, type, required, sort)
+             values (${tenantId}, 'asset', ${f.key}, ${f.label}, ${f.type}, ${f.required}, ${i + 1})
+             on conflict (tenant_id, entity, key) do nothing`;
+  }
+  for (const c of inv.checklists) {
+    await tx`insert into checklist_templates (tenant_id, key, label, asset_type_id, version, items, log_failure)
+             select ${tenantId}, ${c.key}, ${c.label}, (select id from asset_types where tenant_id = ${tenantId} and key = ${c.assetTypeKey}),
+                    1, ${tx.json(c.items)}, ${c.logFailure}
+             where not exists (select 1 from checklist_templates where tenant_id = ${tenantId} and key = ${c.key})`;
+  }
+  for (const it of inv.items) {
+    await tx`insert into items (tenant_id, sku, name, category, unit)
+             select ${tenantId}, ${it.sku}, ${it.name}, ${it.category}, ${it.unit}
+             where not exists (select 1 from items where tenant_id = ${tenantId} and name = ${it.name})`;
+  }
+  for (const l of inv.stockLocations) {
+    await tx`insert into stock_locations (tenant_id, name, kind)
+             select ${tenantId}, ${l.name}, ${l.kind}
+             where not exists (select 1 from stock_locations where tenant_id = ${tenantId} and name = ${l.name} and parent_id is null)`;
+  }
   await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
            where tenant_id = ${tenantId} and enabled_modules = '{}'`;
 

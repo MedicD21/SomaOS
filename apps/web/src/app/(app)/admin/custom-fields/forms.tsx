@@ -8,11 +8,12 @@ const TYPES = [
   ['date', 'Date'], ['select', 'Dropdown'], ['multi_select', 'Multiple choice'], ['email', 'Email'], ['phone', 'Phone'],
 ] as const;
 
-export function AddCustomFieldForm() {
+export function AddCustomFieldForm({ entity = 'member' }: { entity?: 'member' | 'asset' }) {
   return (
     <ActionForm action={addCustomField} label="Add custom field" submitLabel="Add field" resetOnSuccess>
       {(e) => (
         <div className="grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="entity" value={entity} />
           <Field id="cf-label" label="Label" error={e.label}><Input id="cf-label" name="label" required /></Field>
           <Field id="cf-key" label="Key (optional)" hint="Generated from the label if blank" error={e.key}><Input id="cf-key" name="key" /></Field>
           <Field id="cf-type" label="Type" error={e.type}>

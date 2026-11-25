@@ -15,3 +15,6 @@ export * from './form';
 export * from './time';
 export * from './trade';
 export * from './open-shift';
+export * from './asset';
+export * from './checklist';
+export * from './inventory';

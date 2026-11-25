@@ -17,13 +17,16 @@ export const NAV: NavItem[] = [
   { href: '/documents', label: 'Documents', module: 'documents', anyOf: ['documents.view', 'documents.manage'] },
   { href: '/sogs', label: 'SOGs', module: 'documents', anyOf: ['sog.acknowledge', 'sog.report', 'sog.assign'] },
   { href: '/forms', label: 'Forms', module: 'forms', anyOf: ['forms.submit', 'forms.approve', 'forms.manage', 'forms.view_all'] },
+  { href: '/assets', label: 'Assets', module: 'inventory', anyOf: ['inventory.asset.view'] },
+  { href: '/checks', label: 'Checks', module: 'inventory', anyOf: ['inventory.check.perform', 'inventory.asset.view'] },
+  { href: '/inventory', label: 'Inventory', module: 'inventory', anyOf: ['inventory.stock.view'] },
   { href: '/leave', label: 'My leave', module: 'leave', anyOf: ['leave.request'] },
   { href: '/leave/approvals', label: 'Leave approvals', module: 'leave', anyOf: ['leave.approve'] },
   {
     href: '/admin',
     label: 'Admin',
     module: 'admin',
-    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage', 'pay.manage', 'forms.manage'],
+    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage', 'pay.manage', 'forms.manage', 'inventory.asset.manage', 'inventory.check.manage', 'inventory.stock.manage'],
   },
 ];
 
@@ -43,6 +46,9 @@ export const ADMIN_NAV: (NavItem & { anyOf: Permission[] })[] = [
   { href: '/admin/leave', label: 'Leave', module: 'leave', anyOf: ['leave.manage'] },
   { href: '/admin/pay', label: 'Pay', module: 'pay', anyOf: ['pay.manage'] },
   { href: '/admin/form-definitions', label: 'Form builder', module: 'forms', anyOf: ['forms.manage'] },
+  { href: '/admin/assets', label: 'Asset types', module: 'inventory', anyOf: ['inventory.asset.manage'] },
+  { href: '/admin/checklists', label: 'Checklists', module: 'inventory', anyOf: ['inventory.check.manage'] },
+  { href: '/admin/inventory', label: 'Items and locations', module: 'inventory', anyOf: ['inventory.stock.manage'] },
   { href: '/admin/audit', label: 'Audit log', module: 'admin', anyOf: ['admin.audit.view'] },
 ];
 

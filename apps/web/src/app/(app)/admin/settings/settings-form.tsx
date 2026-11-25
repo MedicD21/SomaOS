@@ -59,6 +59,9 @@ export function SettingsForm({
             <label className="flex items-center gap-2">
               <input type="checkbox" name="modules" value="forms" defaultChecked={enabledModules.includes('forms')} /> Forms
             </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="inventory" defaultChecked={enabledModules.includes('inventory')} /> Assets and inventory
+            </label>
           </fieldset>
           <Field id="reason" label="Reason for change (optional)">
             <Input id="reason" name="reason" />
