@@ -336,3 +336,22 @@ Plan: `docs/superpowers/plans/2026-11-24-phase-1d-trades.md`. Page: `/trades`.
   limits per shift or station (1d-3), per-member trade limits.
 - **Existing departments:** the new permission is in the starter roles; a department created earlier must add
   `scheduling.trade.request` to its member roles (Admin → Roles).
+
+## Open shifts (Phase 1d-2)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-1d2-open-shifts.md`. Page: `/open-shifts`.
+
+- **Flow:** an officer with `scheduling.roster.edit` at a seat's unit posts an unfilled seat and time (regular or overtime, with a
+  reason, at most 48 h, in the future) → members with `scheduling.openshift.claim` claim it → an officer at that unit approves one
+  claim → the assignment is created and the other pending claims are superseded (everyone is notified).
+- **Rules (SQL: `post_open_shift`, `cancel_open_shift`, `claim_open_shift`, `withdraw_claim`, `decide_claim`):** the seat must not already be
+  filled or posted for that time; a claim is refused if it overlaps the member's own scheduled shift; one pending claim per member per
+  open shift; nobody decides their own claim; cancelling withdraws pending claims. Tables have no direct writes.
+- **Conflicts on approval:** the assignment is inserted inside `decide_claim`, so the roster's overlap constraints refuse a double-booked
+  member or an already-filled seat, and nothing changes.
+- **Qualification:** the web layer checks the claimant against the seat with the same engine as manual fills and trades
+  (`claimQualification`); a block needs an override reason from someone holding `scheduling.qualification.override` at the unit,
+  which the database re-checks. Acting (below minimum rank where allowed) is recorded on the assignment.
+- **Visibility:** open shifts are visible to claim-permission holders and to officers of the seat's unit; claims to the claimant and those officers.
+- **Not yet:** call-back lists and mandatory hold-over ordering, special pay rules for open shifts, leave limits (1d-3).
+- **Existing departments:** add `scheduling.openshift.claim` to their member roles (Admin → Roles).

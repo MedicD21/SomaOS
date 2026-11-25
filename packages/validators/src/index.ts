@@ -10,3 +10,4 @@ export * from './password';
 export * from './pay';
 export * from './time';
 export * from './trade';
+export * from './open-shift';

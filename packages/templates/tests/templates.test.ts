@@ -53,6 +53,9 @@ describe('scheduling templates', () => {
     expect(roles.member).toContain('scheduling.trade.request');
     expect(roles.company_officer).toContain('scheduling.trade.request');
     expect(roles.external).not.toContain('scheduling.trade.request');
+    expect(roles.member).toContain('scheduling.openshift.claim');
+    expect(roles.chief_officer).toContain('scheduling.openshift.claim');
+    expect(roles.external).not.toContain('scheduling.openshift.claim');
     expect(roles.company_officer).not.toContain('scheduling.config.manage');
   });
 });
