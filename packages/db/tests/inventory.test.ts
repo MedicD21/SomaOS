@@ -63,7 +63,7 @@ describe('receiving and using', () => {
       });
       expect(await onHand(tx, w.st1, w.gauze)).toBe(7);
       expect(await onHand(tx, w.bag1, w.gauze)).toBe(3);
-      const [u] = await tx<{ performed_by: string; delta: string; type: string }[]>`select performed_by, delta, type from stock_ledger where type = 'use' and reason = 'Patient care'`;
+      const [u] = await tx<{ performed_by: string; delta: string; type: string }[]>`select performed_by, delta, type from stock_ledger where tenant_id = ${w.t} and type = 'use' and reason = 'Patient care'`;
       expect(u).toMatchObject({ performed_by: w.user1.m, type: 'use' });
       expect(Number(u!.delta)).toBe(-3);
     });
@@ -120,7 +120,7 @@ describe('transfers', () => {
       });
       expect(await onHand(tx, w.st1, w.gauze)).toBe(6);
       expect(await onHand(tx, w.bag1, w.gauze)).toBe(4);
-      const rows = await tx<{ type: string; transfer_id: string; delta: string }[]>`select type, transfer_id, delta from stock_ledger where type like 'transfer%' order by type`;
+      const rows = await tx<{ type: string; transfer_id: string; delta: string }[]>`select type, transfer_id, delta from stock_ledger where tenant_id = ${w.t} and type like 'transfer%' order by type`;
       expect(rows).toHaveLength(2);
       expect(rows[0]!.transfer_id).toBe(rows[1]!.transfer_id);
       expect(Number(rows[0]!.delta) + Number(rows[1]!.delta)).toBe(0);
