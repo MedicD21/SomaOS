@@ -32,7 +32,7 @@ export const career3Platoon: DepartmentTemplate = {
     { key: 'c', label: 'C Shift', color: '#16a34a' },
   ],
   roles: DEFAULT_ROLES,
-  enabledModules: ['admin', 'files', 'scheduling', 'leave', 'pay', 'documents', 'forms', 'inventory'],
+  enabledModules: ['admin', 'files', 'scheduling', 'leave', 'pay', 'documents', 'forms', 'inventory', 'custody'],
   credentialTypes: DEFAULT_CREDENTIAL_TYPES,
   inventory: STARTER_INVENTORY,
   leave: CAREER_LEAVE,

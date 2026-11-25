@@ -117,4 +117,17 @@ describe('documents and forms starter pack', () => {
     expect(roles.dept_admin).toEqual(expect.arrayContaining(['documents.backdate', 'forms.manage', 'forms.view_all']));
     expect(roles.external).toEqual([]);
   });
+
+  it('custody permissions are separate: admin gets none by default, only the intended roles hold each one', () => {
+    const roles = Object.fromEntries(TEMPLATES['career-3-platoon'].roles.map((r) => [r.key, r.permissions]));
+    const custody = (key: string) => (roles[key] ?? []).filter((p) => p.startsWith('custody.')).sort();
+    expect(custody('dept_admin')).toEqual([]);
+    for (const key of ['member', 'company_officer', 'shift_commander']) expect(custody(key), key).toEqual(['custody.record', 'custody.witness']);
+    for (const key of ['cs_officer', 'medical_director']) expect(custody(key), key).toEqual(['custody.audit', 'custody.manage']);
+    expect(custody('auditor')).toEqual(['custody.audit']);
+    for (const key of ['volunteer', 'probationary', 'scheduler', 'payroll_hr', 'logistics_officer', 'external']) expect(custody(key), key).toEqual([]);
+    expect(TEMPLATES['career-3-platoon'].roles.find((r) => r.key === 'cs_officer')?.label).toBe('Controlled-Substance Officer');
+    expect(TEMPLATES['career-3-platoon'].enabledModules).toContain('custody');
+    expect(TEMPLATES.volunteer.enabledModules).not.toContain('custody');
+  });
 });

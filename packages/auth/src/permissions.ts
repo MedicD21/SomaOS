@@ -43,6 +43,11 @@ export const PERMISSIONS = {
   'forms.submit': { label: 'Fill in and submit forms', module: 'forms' },
   'forms.approve': { label: 'Approve or return submitted forms', module: 'forms' },
   'forms.view_all': { label: 'View all form submissions', module: 'forms', sensitive: 'HR' },
+  // Controlled-substance custody. Four separate permissions; none implies another.
+  'custody.record': { label: 'Record custody movements and counts at a unit', module: 'custody', sensitive: 'MEDICAL' },
+  'custody.witness': { label: 'Witness custody waste, transfers and counts', module: 'custody', sensitive: 'MEDICAL' },
+  'custody.audit': { label: 'Read all custody records (read-only)', module: 'custody', sensitive: 'MEDICAL' },
+  'custody.manage': { label: 'Manage the custody catalog, adjustments and discrepancies', module: 'custody', sensitive: 'MEDICAL' },
   'inventory.asset.view': { label: 'View assets and their history', module: 'inventory' },
   'inventory.asset.manage': { label: 'Manage asset types and assets', module: 'inventory' },
   'inventory.asset.event': { label: 'Log asset events and change status or location', module: 'inventory' },
