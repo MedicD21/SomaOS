@@ -27,9 +27,9 @@ export async function saveDefinition(_prev: ActionResult, form: FormData): Promi
   }
   const v = parsed.data;
   return runAdmin('forms.manage', form, async (tx) => {
-    const [row] = await tx<{ id: string; version: number }[]>`
-      with d as (select app.save_form_definition(${v.key}, ${v.label}, ${v.description}, ${tx.json(v.fields as never)}, ${v.requiresSignature}, ${v.signatureStatement}, ${v.approval}) as id)
-      select d.id, f.version from d join form_definitions f on f.id = d.id`;
+    const [saved] = await tx<{ id: string }[]>`
+      select app.save_form_definition(${v.key}, ${v.label}, ${v.description}, ${tx.json(v.fields as never)}, ${v.requiresSignature}, ${v.signatureStatement}, ${v.approval}) as id`;
+    const [row] = await tx<{ version: number }[]>`select version from form_definitions where id = ${saved!.id}`;
     return `Saved draft version ${row!.version} of ${v.label}. Publish it to make it available.`;
   });
 }

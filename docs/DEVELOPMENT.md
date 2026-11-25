@@ -375,3 +375,69 @@ Plan: `docs/superpowers/plans/2026-11-25-phase-1d3-leave-limits.md`. Admin: **Ad
   (`app.leave_request_limits`); the override field appears only for managers on a request that is over.
 - **Not yet:** seniority-based auto-approval, waitlists, per-leave-type fairness, limits driven by actual roster staffing.
 - `app.decide_leave` now takes an optional 4th argument (override reason); the 3-argument call still works.
+
+## Documents, SOGs and forms (Phase 4a)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-4a-documents-forms.md`. Pages: `/documents`, `/sogs`, `/forms`, `/admin/form-definitions`.
+Modules `documents` and `forms` (Admin → Settings turns them on for departments created before this).
+
+### Documents
+- **Folders** nest; a folder can be restricted to department-wide holders of a permission (the starter **HR** folder uses
+  `admin.members.manage`). A restricted folder hides everything under it from everyone else, including the file itself
+  (`attachments` rows of entity `document_version` follow the version row's visibility, not just `files.view`).
+- A **document** has a kind (document / SOG / policy), an optional number (SOG 3.4) and many **versions**. Upload creates a
+  *draft*; `documents.publish` publishes it, which **supersedes** the previous version in one transaction (it stays
+  readable). A published version's file, label, dates and notes can never change, and versions are never deleted.
+  Backdating an effective date needs `documents.backdate` and a reason. Concurrent publishes are serialised per document.
+- Writes only go through `app.save_folder`, `create_document`, `add_document_version`, `publish_document_version`, `archive_document`.
+
+### Required reading (SOGs)
+- `sog.assign` assigns a *published* version to everyone, to units (and their sub-units) and/or roles, with a due date
+  (default 14 days), a statement and an optional typed-name requirement. Assignees are the active members matching the
+  audience at that time; the daily job (`reading-reminders`, `app.send_reading_reminders()`) adds later joiners.
+- A member acknowledges once (`app.acknowledge_reading`): the row records member, version in force, server time, the
+  exact statement and method (click or typed name) plus a SHA-256 `ack_hash`, and **cannot be changed or deleted**.
+  Acknowledging for someone else, an unassigned reading, a closed reading or after a newer *major* version is refused.
+- **Major vs minor** is the publisher's choice at publish time: a major version closes the old reading and opens a new one
+  for the same audience (old acknowledgements remain as history); a minor one keeps the open reading.
+- **Reminders** go through the notifications + jobs outbox at assignment, 7 days before due, on the due date, then every 7
+  days while overdue; each is logged per (reading, member, kind, day) so a rerun never double-sends. Acknowledged and
+  separated members get none; email honours notification preferences.
+- Officers with `sog.report` see who has not read it for their unit; members see only their own rows.
+
+### Forms
+- A **definition** is versioned JSON: fields use the custom-field types (`text, long_text, number, integer, boolean, date,
+  select, multi_select, email, phone`) plus an optional `show_if {field, equals}` on an *earlier* field. It also says
+  whether a signature is required (with the statement the signer agrees to) and whether an officer approves. Definitions are
+  never edited: **saving creates a new draft version**, publishing retires the old one.
+- **Submissions** are append-only and keep a copy of the definition they answered, so editing the form later never changes
+  history. The database validates answers (required, type, options, hidden fields must be empty) with the same wording as
+  custom fields (`app.validate_form_answers`).
+- **Signatures:** typed (the member retypes their own full name) or drawn (PNG stored base64 in the signature row, so
+  members need no file permissions). Each records signer, server time, method, the exact statement, IP and browser.
+- **Hashes** are computed in SQL in the function that inserts the row:
+  `submission_hash = sha256(tenant | definition_id | definition_version | member_id | submitted_at(UTC ISO) | answers jsonb text)`;
+  `signature_hash = sha256(submission_hash | signer | signed_at | method | statement | sha256(image))`.
+  `app.verify_submission(id)` recomputes both from stored data; the submission page shows *Intact* or a warning. This shows the
+  stored record was not altered after submission; it does not make an exported file tamper-evident (see below).
+- **Approval:** `approval = officer` needs a `forms.approve` holder whose grant covers the **submitter's station**, never the
+  submitter. Decisions (`approved`, `rejected`, `returned` with a note) are append-only rows; status is a view. A returned or
+  rejected submission is corrected by a **new submission that links to the original**, which stays visible, marked
+  "corrected by". The submitter can void before any decision; `forms.manage` can void any (reason required).
+- Starter content (editable, no legal review): folders *Policies and SOGs, Forms Library, Training, HR* and three forms
+  (Incident / Injury Report, Vehicle Damage Report — officer approval and signature; Equipment Issue Receipt — signature only).
+
+### Defaults applied for the plan's open questions
+Click acknowledgement (typed name per reading); publisher chooses major/minor; HR folder restricted by permission; 14-day
+due date with the reminder schedule above; officer sign-off on incident and vehicle reports only; on-screen signatures for
+internal forms with legal-grade sealing later; corrected submissions never replace the original; no NinthBrain import (upload
+current PDFs as version 1 and rebuild forms in the builder).
+
+### Not yet (needs a later compliance pass)
+PDF/A rendering of submissions, platform sealing (PAdES with a KMS key and an RFC 3161 timestamp), step-up authentication at
+signing, consumer e-sign consent screens and public signing links, per-form signature policy (witness, countersign order),
+retention schedules and legal holds, repeating sections/photo/GPS fields, multi-step approval chains, review-cycle reminders
+for documents, redlines between versions, full-text search, offline form sync.
+Existing departments: add the new permissions to their roles (Admin → Roles) and enable the modules.
+Tests: `packages/db/tests/{documents,readings,forms}.test.ts`, `apps/web/tests/db/documents-forms.test.ts`,
+`apps/worker/tests/db/reading-reminders.test.ts`, `apps/web/e2e/{documents,forms}.spec.ts`.

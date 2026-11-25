@@ -18,7 +18,7 @@ export type MyReading = {
 /** The caller's own required reading, newest first; the link goes to the version currently in force. */
 export async function loadMyReadings(tx: Tx): Promise<MyReading[]> {
   const rows = await tx<MyReading[]>`
-    select r.id as "readingId", d.title, d.number, cv.label as "versionLabel", r.due_on::text as "dueOn",
+    select r.id as "readingId", d.title, d.number, coalesce(av.label, cv.label, rv.label) as "versionLabel", r.due_on::text as "dueOn",
            (k.id is null and r.closed_at is null and r.due_on < app.today()) as overdue,
            r.statement, r.require_typed_name as "requireTypedName", k.acknowledged_at as "acknowledgedAt", r.closed_at is not null as closed,
            cv.attachment_id as "attachmentId"
@@ -26,7 +26,9 @@ export async function loadMyReadings(tx: Tx): Promise<MyReading[]> {
     join required_readings r on r.id = a.reading_id
     join documents d on d.id = r.document_id
     left join document_versions cv on cv.document_id = r.document_id and cv.status = 'published'
+    join document_versions rv on rv.id = r.version_id
     left join acknowledgements k on k.reading_id = r.id and k.member_id = a.member_id
+    left join document_versions av on av.id = k.version_id
     where a.member_id = app.my_member_id()
     order by (k.id is null and r.closed_at is null) desc, r.due_on nulls last, d.title`;
   return [...rows];
