@@ -9,3 +9,4 @@ export * from './leave';
 export * from './password';
 export * from './pay';
 export * from './time';
+export * from './trade';

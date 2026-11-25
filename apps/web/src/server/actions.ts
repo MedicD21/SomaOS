@@ -16,7 +16,7 @@ const LEAVE_MESSAGES =
   /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero)/i;
 
 const TIME_MESSAGES =
-  /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period)/i;
+  /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period|that is not one of|that shift was not found|choose a shift|only upcoming|one of those shifts|that member has separated|only the member asked|this trade|that trade|only the members in|not in your scope|an override reason|overriding needs)/i;
 
 export function friendlyDbError(e: unknown): string {
   if (e instanceof ActionError) return e.message;
