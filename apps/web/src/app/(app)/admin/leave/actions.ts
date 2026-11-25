@@ -1,6 +1,6 @@
 'use server';
 import { earnForPeriod, type AccrualFacts } from '@soma/schedule-engine';
-import { adjustmentSchema, bankSchema, leaveTypeSchema, parseAccrualPolicyJson } from '@soma/validators';
+import { adjustmentSchema, bankSchema, leaveLimitSchema, leaveTypeSchema, parseAccrualPolicyJson } from '@soma/validators';
 import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
 import { runAdmin, zodFieldErrors } from '@/server/actions';
@@ -97,6 +97,29 @@ export async function previewPolicy(_prev: ActionResult, form: FormData): Promis
   const r = earnForPeriod(policy.policy, facts, period);
   const why = r.explain.map((e) => e.message).join(' ');
   return { ok: true, message: `${r.hours} h earned for ${period.start} to ${period.endExclusive}. ${why}` };
+}
+
+/** Caps how many members may be on approved leave at once (blank station/shift/type = any). */
+export async function addLeaveLimit(_prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const parsed = leaveLimitSchema.safeParse({
+    label: form.get('label'), orgUnitId: form.get('orgUnitId'), shiftId: form.get('shiftId'), leaveTypeId: form.get('leaveTypeId'),
+    maxConcurrent: form.get('maxConcurrent'), effectiveFrom: form.get('effectiveFrom'),
+  });
+  if (!parsed.success) return zodFieldErrors(parsed.error.issues);
+  const v = parsed.data;
+  return runAdmin('leave.manage', form, async (tx) => {
+    await tx`insert into leave_limits (tenant_id, label, scope_kind, org_unit_id, shift_id, leave_type_id, max_concurrent, effective)
+             values (app.tenant_id(), ${v.label}, ${v.scopeKind}, ${v.orgUnitId}, ${v.shiftId}, ${v.leaveTypeId}, ${v.maxConcurrent},
+                     daterange(${v.effectiveFrom}::date, null))`;
+    return `Added ${v.label}`;
+  });
+}
+
+export async function setLimitArchived(id: string, archived: boolean, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  return runAdmin('leave.manage', form, async (tx) => {
+    await tx`update leave_limits set archived_at = ${archived ? new Date() : null} where id = ${id}`;
+    return archived ? 'Archived' : 'Restored';
+  });
 }
 
 export async function adjustBalance(_prev: ActionResult, form: FormData): Promise<ActionResult> {

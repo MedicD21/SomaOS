@@ -13,7 +13,7 @@ export const IDLE: ActionResult = { ok: null, message: null };
 
 /** Maps database errors to messages a department admin can act on. */
 const LEAVE_MESSAGES =
-  /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero)/i;
+  /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero|leave limit:|an override reason|not allowed: overriding a leave limit)/i;
 
 const TIME_MESSAGES =
   /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period|that is not one of|that shift was not found|choose a shift|only upcoming|one of those shifts|that member has separated|only the member asked|this trade|that trade|only the members in|not in your scope|an override reason|overriding needs|that seat is not available|open shifts can only|the end must be after|only upcoming times|an open shift can be|explain the open shift|explain the cancellation|that open shift is|that seat is already filled|that seat and time is already|you are already scheduled|you already have a claim|only the member who claimed|this claim is|unknown open shift|unknown claim)/i;

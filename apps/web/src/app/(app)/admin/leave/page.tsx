@@ -2,10 +2,12 @@ import { Forbidden } from '@/components/forbidden';
 import { Card } from '@/components/ui/card';
 import { check, getRequestContext, withCtxDb } from '@/server/context';
 import { BLANK_POLICY, listPolicyVersions, type PolicyVersion } from '@/server/leave/policies';
-import { AddBankForm, AddLeaveTypeForm, AdjustForm, ArchiveBankForm, ArchiveTypeForm, PolicyPanel } from './forms';
+import { localDateOf } from '@soma/schedule-engine';
+import { AddBankForm, AddLeaveTypeForm, AddLimitForm, AdjustForm, ArchiveBankForm, ArchiveLimitForm, ArchiveTypeForm, PolicyPanel } from './forms';
 
 type Bank = { id: string; key: string; label: string; archived: boolean };
 type Type = { id: string; label: string; bank_label: string | null; lead_time_days: number; requires_documentation: boolean; archived: boolean };
+type Limit = { id: string; label: string; max: number; unit: string | null; shift: string | null; type: string | null; from: string; archived: boolean };
 type Entry = { id: string; when: string; member: string; bank: string; kind: string; hours: number; note: string | null };
 
 function policyStatus(versions: PolicyVersion[]): string {
@@ -36,9 +38,16 @@ export default async function LeaveAdminPage() {
              l.hours::float8 as hours, l.note
       from leave_ledger l join members m on m.id = l.member_id join leave_banks b on b.id = l.bank_id
       order by l.id desc limit 25`;
+    const limits = await tx<Limit[]>`
+      select l.id, l.label, l.max_concurrent as max, ou.name as unit, sh.label as shift, lt.label as type, lower(l.effective)::text as from,
+             l.archived_at is not null as archived
+      from leave_limits l left join org_units ou on ou.id = l.org_unit_id left join shifts sh on sh.id = l.shift_id
+      left join leave_types lt on lt.id = l.leave_type_id order by l.archived_at nulls first, l.label`;
+    const units = await tx<{ id: string; label: string }[]>`select id, name as label from org_units order by name`;
+    const shifts = await tx<{ id: string; label: string }[]>`select id, label from shifts order by label`;
     const versions: Record<string, PolicyVersion[]> = {};
     for (const b of banks) if (!b.archived) versions[b.key] = await listPolicyVersions(tx, b.key);
-    return { banks: [...banks], types: [...types], members: [...members], entries: [...entries], versions };
+    return { banks: [...banks], types: [...types], limits: [...limits], units: [...units], shifts: [...shifts], members: [...members], entries: [...entries], versions };
   });
   const active = data.banks.filter((b) => !b.archived);
   const bankOptions = active.map((b) => ({ id: b.id, label: b.label }));
@@ -73,6 +82,25 @@ export default async function LeaveAdminPage() {
           ))}
         </ul>
         <AddLeaveTypeForm banks={bankOptions} />
+      </Card>
+
+      <Card title="Leave limits">
+        <p className="mb-3 text-sm text-muted">
+          Cap how many members can be on approved leave on the same day. Members can still request; approving a request that goes over a limit
+          needs a leave manager to override it with a reason.
+        </p>
+        <ul aria-label="Leave limits" className="mb-4 space-y-2">
+          {data.limits.length === 0 && <li className="text-sm text-muted">No limits yet.</li>}
+          {data.limits.map((l) => (
+            <li key={l.id}>
+              <span className="font-medium">{l.label}</span>
+              <span className="text-sm text-muted"> · at most {l.max} · {l.unit ?? 'whole department'}{l.shift ? ` · ${l.shift} shift` : ''} · {l.type ?? 'any leave type'} · from {l.from}</span>
+              {l.archived && <span className="ml-2 text-sm text-muted">(archived)</span>}
+              <details><summary className="cursor-pointer text-sm underline">Manage {l.label}</summary><ArchiveLimitForm id={l.id} label={l.label} archived={l.archived} /></details>
+            </li>
+          ))}
+        </ul>
+        <AddLimitForm units={data.units} shifts={data.shifts} types={data.types.filter((t) => !t.archived).map((t) => ({ id: t.id, label: t.label }))} today={localDateOf(new Date(), ctx.tenant.timezone)} />
       </Card>
 
       <section aria-labelledby="policies-heading" className="space-y-4">

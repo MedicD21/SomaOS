@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { ActionForm } from '@/components/action-form';
 import { Field, Input, Select } from '@/components/ui/field';
-import { addBank, addLeaveType, adjustBalance, approvePolicy, previewPolicy, savePolicy, setBankArchived, setTypeArchived } from './actions';
+import { addBank, addLeaveLimit, addLeaveType, adjustBalance, approvePolicy, previewPolicy, savePolicy, setBankArchived, setLimitArchived, setTypeArchived } from './actions';
 
 type Opt = { id: string; label: string };
 
@@ -21,6 +21,38 @@ export function AddBankForm() {
 export function ArchiveBankForm({ id, label, archived }: { id: string; label: string; archived: boolean }) {
   return (
     <ActionForm action={setBankArchived.bind(null, id, !archived)} label={`${archived ? 'Restore' : 'Archive'} ${label}`}
+      submitLabel={`${archived ? 'Restore' : 'Archive'} ${label}`} submitVariant="secondary" className="mt-2 space-y-2" />
+  );
+}
+
+export function AddLimitForm({ units, shifts, types, today }: { units: Opt[]; shifts: Opt[]; types: Opt[]; today: string }) {
+  return (
+    <ActionForm action={addLeaveLimit} label="Add leave limit" submitLabel="Add limit" resetOnSuccess>
+      {(e) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="ll-label" label="Label" error={e.label}><Input id="ll-label" name="label" required /></Field>
+          <Field id="ll-max" label="Most members on leave at once" hint="0 means no one may be off." error={e.maxConcurrent}>
+            <Input id="ll-max" name="maxConcurrent" type="number" min={0} max={1000} step={1} inputMode="numeric" required />
+          </Field>
+          <Field id="ll-unit" label="Station" hint="Includes sub-units. Blank means the whole department." error={e.orgUnitId}>
+            <Select id="ll-unit" name="orgUnitId" defaultValue=""><option value="">— Whole department —</option>{units.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+          </Field>
+          <Field id="ll-shift" label="Shift" error={e.shiftId}>
+            <Select id="ll-shift" name="shiftId" defaultValue=""><option value="">— Any shift —</option>{shifts.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+          </Field>
+          <Field id="ll-type" label="Leave type" hint="Only this type counts toward, and is held to, the limit." error={e.leaveTypeId}>
+            <Select id="ll-type" name="leaveTypeId" defaultValue=""><option value="">— Any leave type —</option>{types.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+          </Field>
+          <Field id="ll-from" label="Starts" error={e.effectiveFrom}><Input id="ll-from" name="effectiveFrom" type="date" defaultValue={today} required /></Field>
+        </div>
+      )}
+    </ActionForm>
+  );
+}
+
+export function ArchiveLimitForm({ id, label, archived }: { id: string; label: string; archived: boolean }) {
+  return (
+    <ActionForm action={setLimitArchived.bind(null, id, !archived)} label={`${archived ? 'Restore' : 'Archive'} ${label}`}
       submitLabel={`${archived ? 'Restore' : 'Archive'} ${label}`} submitVariant="secondary" className="mt-2 space-y-2" />
   );
 }
