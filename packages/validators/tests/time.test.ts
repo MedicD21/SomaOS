@@ -52,3 +52,19 @@ describe('trade schemas', async () => {
     expect(decideTradeSchema.safeParse({ id, approve: false }).success).toBe(true);
   });
 });
+
+describe('open shift schemas', async () => {
+  const { postOpenShiftSchema, decideClaimSchema, claimOpenShiftSchema } = await import('../src');
+  it('post needs a seat, regular or overtime, and a reason', () => {
+    const seatId = crypto.randomUUID();
+    expect(postOpenShiftSchema.safeParse({ seatId, type: 'overtime', reason: 'Short for the weekend' }).success).toBe(true);
+    expect(postOpenShiftSchema.safeParse({ seatId, type: 'detail', reason: 'Short for the weekend' }).success).toBe(false);
+    expect(postOpenShiftSchema.safeParse({ seatId, type: 'regular', reason: 'no' }).success).toBe(false);
+  });
+  it('claim note is optional and blank becomes null; an override needs a real reason', () => {
+    const id = crypto.randomUUID();
+    expect(claimOpenShiftSchema.parse({ id, note: '  ' }).note).toBeNull();
+    expect(decideClaimSchema.safeParse({ id, approve: true, overrideReason: 'no' }).success).toBe(false);
+    expect(decideClaimSchema.safeParse({ id, approve: true, overrideReason: 'Short staffed' }).success).toBe(true);
+  });
+});

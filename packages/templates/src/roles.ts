@@ -4,7 +4,8 @@ import type { DepartmentTemplate } from './types';
 
 const VIEW: Permission[] = ['files.view'];
 const ROSTER: Permission[] = ['scheduling.roster.view', 'scheduling.roster.edit'];
-const TRADE: Permission[] = ['scheduling.trade.request'];
+/** Self-service scheduling: propose and answer trades, claim open shifts. */
+const TRADE: Permission[] = ['scheduling.trade.request', 'scheduling.openshift.claim'];
 const LEAVE_APPROVER: Permission[] = ['leave.request', 'leave.approve', 'leave.view'];
 const OFFICER: Permission[] = ['admin.members.view', 'files.view', 'files.upload', 'notifications.send'];
 
