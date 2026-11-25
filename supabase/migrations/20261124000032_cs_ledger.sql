@@ -167,6 +167,39 @@ begin
 end $$;
 revoke execute on function app.cs_me() from public, anon, authenticated;
 
+-- Does this member (not the caller) hold custody.witness covering the unit right now? Their grants are looked up directly.
+create or replace function app.cs_member_can_witness(p_member uuid, p_unit uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.role_grants g
+    join public.role_permissions rp on rp.role_id = g.role_id and rp.tenant_id = g.tenant_id
+    left join public.org_units gu on gu.id = g.scope_org_unit_id
+    join public.org_units tu on tu.id = p_unit
+    where g.member_id = p_member and g.tenant_id = app.tenant_id() and rp.permission = 'custody.witness'
+      and g.valid @> now()
+      and (g.scope_kind = 'department' or (g.scope_kind = 'org_unit' and tu.path operator(extensions.<@) gu.path)))
+$$;
+revoke execute on function app.cs_member_can_witness(uuid, uuid) from public, anon, authenticated;
+
+-- Who could witness for me at this location (so the page can offer a list)? Needs record or manage at the unit.
+create or replace function app.cs_witness_candidates(p_location uuid) returns table (member_id uuid, name text)
+language plpgsql stable security definer set search_path = '' as $$
+declare v_unit uuid := app.cs_unit_of(p_location);
+begin
+  if v_unit is null then raise exception 'Unknown location'; end if;
+  if not (app.has_permission_unit('custody.record', v_unit) or app.has_permission_unit('custody.manage', v_unit)) then
+    raise exception 'not allowed: you cannot request witnesses here';
+  end if;
+  return query
+    select m.id, m.last_name || ', ' || m.first_name
+    from public.members m
+    where m.tenant_id = app.tenant_id() and m.status <> 'separated' and m.id is distinct from app.my_member_id()
+      and app.cs_member_can_witness(m.id, v_unit)
+    order by m.last_name, m.first_name;
+end $$;
+revoke execute on function app.cs_witness_candidates(uuid) from public, anon;
+grant execute on function app.cs_witness_candidates(uuid) to authenticated;
+
 -- Ask a different member to witness. The witness must hold custody.witness at the location's unit.
 create or replace function app.request_cs_witness(p_action text, p_payload jsonb, p_location uuid, p_witness uuid) returns uuid
 language plpgsql security definer set search_path = '' as $$
@@ -188,15 +221,7 @@ begin
   if not exists (select 1 from public.members m where m.id = p_witness and m.tenant_id = app.tenant_id() and m.status <> 'separated') then
     raise exception 'Unknown member';
   end if;
-  -- The witness's own permission is checked with their grants, so look them up directly.
-  if not exists (
-    select 1 from public.role_grants g
-    join public.role_permissions rp on rp.role_id = g.role_id and rp.tenant_id = g.tenant_id
-    left join public.org_units gu on gu.id = g.scope_org_unit_id
-    join public.org_units tu on tu.id = v_loc.org_unit_id
-    where g.member_id = p_witness and g.tenant_id = app.tenant_id() and rp.permission = 'custody.witness'
-      and g.valid @> now()
-      and (g.scope_kind = 'department' or (g.scope_kind = 'org_unit' and tu.path operator(extensions.<@) gu.path))) then
+  if not app.cs_member_can_witness(p_witness, v_loc.org_unit_id) then
     raise exception 'That member cannot witness at this location';
   end if;
   insert into public.cs_witness_requests (tenant_id, action, payload, payload_hash, location_id, requested_by, witness_member_id)
