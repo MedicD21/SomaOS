@@ -2,7 +2,10 @@ import { Forbidden } from '@/components/forbidden';
 import { Card } from '@/components/ui/card';
 import { check, getRequestContext, withCtxDb } from '@/server/context';
 import { BLANK_RULES, listRuleVersions, type RulesVersion } from '@/server/pay/rules';
-import { AddGroupForm, AddPayCodeForm, ArchivePayCodeForm, AssignGroupForm, RulesPanel, SetRateForm } from './forms';
+import { RuleWorkbench } from '@/components/rule-builder/RuleWorkbench';
+import type { Doc } from '@/components/rule-builder/path';
+import { approveRules, saveRules, simulatePayRules } from './actions';
+import { AddGroupForm, AddPayCodeForm, ArchivePayCodeForm, AssignGroupForm, SetRateForm } from './forms';
 
 type Code = { id: string; key: string; label: string; kind: string; multiplier: number; export_code: string | null; archived: boolean };
 type Group = { id: string; key: string; label: string; archived: boolean };
@@ -37,9 +40,10 @@ export default async function PayAdminPage() {
       select r.id, m.last_name || ', ' || m.first_name as member, r.hourly_rate::float8 as rate,
              lower(r.effective)::text as from, case when upper_inf(r.effective) then null else upper(r.effective)::text end as to
       from member_pay_rates r join members m on m.id = r.member_id order by lower(r.effective) desc, m.last_name limit 30`;
+    const banks = await tx<{ key: string }[]>`select key from leave_banks where archived_at is null order by key`;
     const versions: Record<string, RulesVersion[]> = {};
     for (const g of groups) if (!g.archived) versions[g.key] = await listRuleVersions(tx, g.key);
-    return { codes: [...codes], groups: [...groups], members: [...members], rates: [...rates], versions };
+    return { codes: [...codes], groups: [...groups], members: [...members], rates: [...rates], versions, banks: banks.map((b) => b.key) };
   });
   const groupOptions = data.groups.filter((g) => !g.archived).map((g) => ({ id: g.id, label: g.label }));
 
@@ -99,7 +103,19 @@ export default async function PayAdminPage() {
             <Card key={g.id}>
               <h3 className="text-base font-semibold">{g.label}</h3>
               <p data-testid={`rules-status-${g.key}`} className="mb-3 text-sm">{rulesStatus(versions)}</p>
-              <RulesPanel groupKey={g.key} groupLabel={g.label} initialJson={JSON.stringify(basis?.payload ?? BLANK_RULES, null, 2)} draftVersion={draft?.version ?? null} canApprove={canApprove} />
+              <RuleWorkbench
+                kind="pay"
+                uid={g.key}
+                label={g.label}
+                initial={(basis?.payload ?? BLANK_RULES) as unknown as Doc}
+                draftVersion={draft?.version ?? null}
+                savedPayload={(draft?.payload ?? null) as unknown as Doc | null}
+                versions={versions.map((v) => ({ version: v.version, status: v.status, fromDate: v.fromDate, payload: v.payload }))}
+                suggestions={{ payCodes: data.codes.filter((c) => !c.archived).map((c) => c.key), banks: data.banks }}
+                members={data.members}
+                canApprove={canApprove}
+                actions={{ save: saveRules, simulate: simulatePayRules, approve: approveRules }}
+              />
             </Card>
           );
         })}

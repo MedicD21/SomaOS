@@ -1,12 +1,15 @@
 'use server';
-import { earnForPeriod, type AccrualFacts } from '@soma/schedule-engine';
-import { adjustmentSchema, bankSchema, leaveLimitSchema, leaveTypeSchema, parseAccrualPolicyJson } from '@soma/validators';
+import type { AccrualPolicy } from '@soma/schedule-engine';
+import { accrualPolicySchema, adjustmentSchema, bankSchema, issuesToFieldErrors, leaveLimitSchema, leaveTypeSchema, parseJsonDocument, unknownPaths } from '@soma/validators';
 import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
 import { runAdmin, zodFieldErrors } from '@/server/actions';
+import type { SimState } from '@/components/rule-builder/sim-types';
 import { check, getRequestContext } from '@/server/context';
 import { approvePolicyDraft, savePolicyDraft } from '@/server/leave/policies';
-import { periods } from './preview-periods';
+import { requireSimulation } from '@/server/rules/guard';
+import { runSimulation } from '@/server/rules/run';
+import { simulateAccrual, todayIn } from '@/server/rules/simulate';
 
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,9 +56,20 @@ export async function setTypeArchived(id: string, archived: boolean, _prev: Acti
 
 export async function savePolicy(bankKey: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
   if (!KEY.test(bankKey)) return { ok: false, message: 'Unknown leave bank.' };
-  const parsed = parseAccrualPolicyJson(String(form.get('policy') ?? ''));
-  if (!parsed.ok) return { ok: false, message: parsed.error, fieldErrors: { policy: parsed.error } };
-  return runAdmin('leave.manage', form, async (tx) => `Saved draft v${await savePolicyDraft(tx, bankKey, parsed.policy)}`);
+  const doc = parseJsonDocument(String(form.get('policy') ?? ''));
+  if (!doc.ok) return { ok: false, message: doc.error, fieldErrors: { policy: doc.error } };
+  const parsed = accrualPolicySchema.safeParse(doc.value);
+  if (!parsed.success) {
+    const fieldErrors = issuesToFieldErrors(parsed.error.issues);
+    const [path, message] = Object.entries(fieldErrors)[0]!;
+    return { ok: false, message: `${path ? `${path}: ` : ''}${message}`, fieldErrors };
+  }
+  // Settings the policy does not use are kept in the stored document (engines ignore them) and reported.
+  const extra = unknownPaths(doc.value, parsed.data);
+  return runAdmin('leave.manage', form, async (tx) => {
+    const v = await savePolicyDraft(tx, bankKey, doc.value as AccrualPolicy);
+    return `Saved draft v${v}${extra.length ? `. Kept settings this policy does not use: ${extra.join(', ')}` : ''}`;
+  });
 }
 
 export async function approvePolicy(bankKey: string, version: number, _prev: ActionResult, form: FormData): Promise<ActionResult> {
@@ -66,37 +80,46 @@ export async function approvePolicy(bankKey: string, version: number, _prev: Act
   const ctx = await getRequestContext();
   const d = check(ctx, 'leave.manage');
   if (!d.allowed) return { ok: false, message: `Not allowed: ${d.reason}` };
-  return runAdmin('admin.config.manage', form, async (tx) => {
-    await approvePolicyDraft(tx, bankKey, version, effectiveDate);
+  const token = String(form.get('simToken') ?? '');
+  return runAdmin('admin.config.manage', form, async (tx, c) => {
+    // The draft must be valid and simulated, exactly as it is stored now, by this user.
+    const note = await requireSimulation(tx, { tenantId: c.tenant.id, userId: c.userId }, 'leave.accrual', bankKey, version, token);
+    await approvePolicyDraft(tx, bankKey, version, effectiveDate, note);
     return `Approved v${version} from ${effectiveDate}`;
   });
 }
 
-const previewSchema = z.object({
-  hireDate: z.union([z.iso.date(), z.literal('')]),
-  employmentType: z.string().trim().min(1).max(40),
-  periodStart: z.iso.date(),
-  hoursWorked: z.coerce.number().min(0).max(10_000),
-  balance: z.coerce.number().min(-10_000).max(100_000),
+const simSchema = z.object({
+  memberId: z.union([z.uuid(), z.literal('')]).default(''),
+  from: z.union([z.iso.date(), z.literal('')]).default(''),
+  hireDate: z.union([z.iso.date(), z.literal('')]).default(''),
+  employmentType: z.string().trim().min(1).max(40).default('career_full_time'),
+  balance: z.coerce.number().min(-10_000).max(100_000).default(0),
+  hoursWorked: z.coerce.number().min(0).max(10_000).default(0),
 });
 
-/** "What would this member earn?" — runs the engine on the policy text without saving anything. */
-export async function previewPolicy(_prev: ActionResult, form: FormData): Promise<ActionResult> {
-  const ctx = await getRequestContext();
-  const d = check(ctx, 'leave.manage');
-  if (!d.allowed) return { ok: false, message: `Not allowed: ${d.reason}` };
-  const policy = parseAccrualPolicyJson(String(form.get('policy') ?? ''));
-  if (!policy.ok) return { ok: false, message: policy.error, fieldErrors: { policy: policy.error } };
-  const parsed = previewSchema.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return zodFieldErrors(parsed.error.issues);
+/** Projects the saved draft over the next 12 periods next to the approved policy, for a real member or sample facts. Writes nothing. */
+export async function simulateAccrualPolicy(bankKey: string, version: number, _prev: SimState, form: FormData): Promise<SimState> {
+  if (!KEY.test(bankKey) || !Number.isInteger(version)) return { ok: false, message: 'Unknown leave policy.' };
+  const parsed = simSchema.safeParse(Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === 'string' ? v : ''])));
+  if (!parsed.success) return { ok: false, message: 'Check the simulation inputs.', fieldErrors: issuesToFieldErrors(parsed.error.issues) };
   const v = parsed.data;
-  const period = periods(policy.policy.period, v.periodStart);
-  const facts: AccrualFacts = {
-    hireDate: v.hireDate || null, employmentType: v.employmentType, hoursWorked: v.hoursWorked, balance: v.balance, separatedOn: null,
-  };
-  const r = earnForPeriod(policy.policy, facts, period);
-  const why = r.explain.map((e) => e.message).join(' ');
-  return { ok: true, message: `${r.hours} h earned for ${period.start} to ${period.endExclusive}. ${why}` };
+  return runSimulation({
+    kind: 'leave.accrual',
+    key: bankKey,
+    version,
+    allowed: (ctx) => check(ctx, 'leave.manage').allowed,
+    run: (tx, ctx, draft) =>
+      simulateAccrual(tx, {
+        bankKey,
+        draft: draft as AccrualPolicy,
+        today: todayIn(ctx.tenant.timezone),
+        from: v.from || null,
+        memberId: v.memberId || null,
+        sample: { hireDate: v.hireDate || null, employmentType: v.employmentType, balance: v.balance },
+        hoursWorkedPerPeriod: v.hoursWorked,
+      }),
+  });
 }
 
 /** Caps how many members may be on approved leave at once (blank station/shift/type = any). */

@@ -3,7 +3,9 @@ import { Forbidden } from '@/components/forbidden';
 import { Card } from '@/components/ui/card';
 import { check, getRequestContext, t, withCtxDb } from '@/server/context';
 import { listPatternVersions, type PatternVersion } from '@/server/scheduling/patterns';
-import { ApproveForm, PatternForm } from './forms';
+import { PatternWorkbench } from '@/components/rule-builder/PatternWorkbench';
+import { approvePattern, simulatePatternDraft } from './actions';
+import { PatternForm } from './forms';
 
 const PREVIEW_DAYS = 14;
 
@@ -112,15 +114,21 @@ export default async function PatternsPage({ searchParams }: { searchParams: Pro
         <PatternForm initial={payload} shifts={shifts} platoonLabel={platoonLabel} />
       </Card>
 
-      {draft && (
-        <Card title={`Approve draft v${draft.version}`}>
-          {canApprove ? (
-            <ApproveForm version={draft.version} defaultDate={addDays(today, 1)} />
-          ) : (
-            <p className="text-sm text-muted">Approving needs the configuration approval and department roster edit permissions.</p>
-          )}
-        </Card>
-      )}
+      <Card title={draft ? `Simulate, compare and approve draft v${draft.version}` : 'Compare versions'}>
+        {draft && !canApprove && (
+          <p className="mb-4 text-sm text-muted">Approving needs the configuration approval and department roster edit permissions.</p>
+        )}
+        <PatternWorkbench
+          draftVersion={draft?.version ?? null}
+          savedPayload={draft?.payload ?? null}
+          versions={versions.map((v) => ({ version: v.version, status: v.status, fromDate: v.fromDate, payload: v.payload }))}
+          shifts={shifts}
+          canApprove={canApprove}
+          defaultDate={addDays(today, 1)}
+          simulate={simulatePatternDraft}
+          approve={approvePattern}
+        />
+      </Card>
 
       <Card title={`Preview: next ${PREVIEW_DAYS} days (${base ? `${base.status === 'draft' ? 'draft' : 'approved'} v${base.version}` : 'default'})`}>
         <div className="relative overflow-x-auto">

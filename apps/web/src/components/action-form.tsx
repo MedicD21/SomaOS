@@ -18,6 +18,7 @@ export function ActionForm({
   submitVariant = 'primary',
   className = 'space-y-4',
   resetOnSuccess = false,
+  submitDisabled = false,
   children,
 }: {
   action: Action;
@@ -26,6 +27,8 @@ export function ActionForm({
   submitVariant?: 'primary' | 'secondary' | 'danger';
   className?: string;
   resetOnSuccess?: boolean;
+  /** Disable the submit button (for example until a prerequisite is met); the server still enforces it. */
+  submitDisabled?: boolean;
   children?: ReactNode | ((errors: Record<string, string>) => ReactNode);
 }) {
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(action, { ok: null, message: null });
@@ -46,7 +49,7 @@ export function ActionForm({
     <form ref={formRef} onSubmit={onSubmit} aria-label={label} className={className} noValidate>
       {typeof children === 'function' ? children(errors) : children}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant={submitVariant} disabled={pending}>
+        <Button type="submit" variant={submitVariant} disabled={pending || submitDisabled}>
           {submitLabel}
         </Button>
         {state.message && (
