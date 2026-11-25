@@ -32,6 +32,14 @@ export const PERMISSIONS = {
   'leave.manage': { label: 'Manage leave banks, policies and balances', module: 'leave', sensitive: 'HR' },
   'pay.view': { label: 'View pay rates and pay period results', module: 'pay', sensitive: 'HR' },
   'pay.manage': { label: 'Manage pay codes, rates and pay rules', module: 'pay', sensitive: 'HR' },
+  'inventory.asset.view': { label: 'View assets and their history', module: 'inventory' },
+  'inventory.asset.manage': { label: 'Manage asset types and assets', module: 'inventory' },
+  'inventory.asset.event': { label: 'Log asset events and change status or location', module: 'inventory' },
+  'inventory.check.perform': { label: 'Complete checklists and rig checks', module: 'inventory' },
+  'inventory.check.manage': { label: 'Manage checklist templates', module: 'inventory' },
+  'inventory.stock.view': { label: 'View stock levels and low-stock lists', module: 'inventory' },
+  'inventory.stock.use': { label: 'Use and move stock', module: 'inventory' },
+  'inventory.stock.manage': { label: 'Receive, adjust and set par levels', module: 'inventory' },
   'notifications.send': { label: 'Send notifications', module: 'notifications' },
 } as const satisfies Record<string, PermissionInfo>;
 
