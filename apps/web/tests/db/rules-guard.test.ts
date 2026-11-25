@@ -238,7 +238,7 @@ describe('simulation', () => {
       const approved = TEMPLATES['career-3-platoon'].schedulePattern!.payload as ShiftPattern;
       const draft: ShiftPattern = { ...approved, cycle: ['on', 'off', 'off', 'off'] };
       await generate(tx, d);
-      const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from shift_assignments where source = 'generated' and status = 'scheduled' and lower(during) > now()`;
+      const n = (await tx<{ n: number }[]>`select count(*)::int as n from shift_assignments where source = 'generated' and status = 'scheduled' and lower(during) > now()`)[0]!.n;
       await asAdmin(tx, d, async () => {
         const { sim } = await simulatePattern(tx, { draft, today: '2026-01-05', tz: 'America/New_York', shiftKey: 'a', from: '2026-01-05', weeks: 4 });
         if (sim.kind !== 'pattern') throw new Error('expected a pattern simulation');

@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AccrualPolicy, PayRules, ShiftPattern } from '@soma/schedule-engine';
+import type { PayRules, ShiftPattern } from '@soma/schedule-engine';
 import { WORK_TYPES } from '@soma/schedule-engine';
 import type { Tx } from '@/server/db';
 
@@ -27,7 +27,7 @@ export async function payRulesRefs(tx: Tx, r: PayRules): Promise<RefIssue[]> {
 }
 
 /** The policy belongs to a leave bank; the bank must exist and be active. */
-export async function accrualRefs(tx: Tx, bankKey: string, _p: AccrualPolicy): Promise<RefIssue[]> {
+export async function accrualRefs(tx: Tx, bankKey: string): Promise<RefIssue[]> {
   const [bank] = await tx<{ archived: boolean }[]>`select archived_at is not null as archived from leave_banks where key = ${bankKey}`;
   if (!bank) return [{ path: '', message: `There is no leave bank "${bankKey}".` }];
   if (bank.archived) return [{ path: '', message: `The leave bank "${bankKey}" is archived.` }];

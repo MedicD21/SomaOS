@@ -40,7 +40,7 @@ export async function checkDraft(tx: Tx, kind: RuleKind, key: string, payload: u
   if (!parsed.success) return { ok: false, errors: issuesToFieldErrors(parsed.error.issues) };
   let refs: RefIssue[] = [];
   if (kind === 'pay.rules') refs = await payRulesRefs(tx, parsed.data as PayRules);
-  else if (kind === 'leave.accrual') refs = await accrualRefs(tx, key, parsed.data as AccrualPolicy);
+  else if (kind === 'leave.accrual') refs = await accrualRefs(tx, key);
   else refs = await patternRefs(tx, parsed.data as ShiftPattern);
   if (refs.length > 0) {
     const errors: Record<string, string> = {};
