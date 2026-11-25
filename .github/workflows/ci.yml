@@ -4,7 +4,34 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push to the same PR cancels the older run. Pushes to main always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Docs-only PRs (docs/ or *.md) skip db-tests and e2e. Skipped jobs count as
+  # passing for required status checks, unlike workflow-level paths-ignore.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git diff --name-only "$BASE_SHA" HEAD | grep -vE '^docs/|\.md$')" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -20,6 +47,8 @@ jobs:
       - run: pnpm test:unit
 
   db-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +65,8 @@ jobs:
       - run: pnpm test:db
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
