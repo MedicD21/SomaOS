@@ -14,8 +14,9 @@ const pf = (key: string, label: string, required = true): ChecklistItemTemplate 
 /**
  * STARTER VALUES ONLY. A generic starting point so a new department sees a working example; every
  * asset type, field, checklist item and supply is editable, and none of it is any department's policy.
- * The Drug Inventory checklist is a count and seal verification only — chain of custody, witnessed
- * waste and discrepancy handling for controlled substances are a later phase.
+ * The Drug Inventory checklist here is a count and seal verification checklist. Controlled-substance
+ * custody (witnessed waste, hash-chained ledger, binding blind counts, discrepancies) is the separate
+ * custody module (Phase 3b, /custody); at stations with a custody location the count is made there.
  */
 export const STARTER_INVENTORY: InventoryTemplate = {
   assetTypes: [
