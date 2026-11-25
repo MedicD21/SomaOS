@@ -52,7 +52,8 @@ test('officer schedules, members sign up and wait, attendance completes and rene
   const [rank] = await sql<{ id: string; label: string }[]>`select id, label from ranks where tenant_id = ${tenantId} order by sort desc limit 1`;
   await sql`update members set rank_id = ${rank!.id} where id = ${riley!.id}`;
   const [home] = await sql<{ seat_id: string }[]>`select ss.seat_id from standing_seats ss where ss.member_id = ${riley!.id}`;
-  await sql`delete from shift_assignments where member_id = ${riley!.id} and lower(during) > now() - interval '10 days'`;
+  // Cancel (not delete): other specs' trades and claims reference these rows. Cancelled rows free the overlap rule.
+  await sql`update shift_assignments set status = 'cancelled', cancelled_reason = 'training e2e setup' where member_id = ${riley!.id} and status = 'scheduled' and lower(during) > now() - interval '10 days'`;
   await sql`delete from member_credentials where member_id = ${riley!.id} and type_id = (select id from credential_types where tenant_id = ${tenantId} and key = 'cpr')`;
 
   const [type] = await sql<{ id: string }[]>`select id from org_unit_types where tenant_id = ${tenantId} and key = 'station'`;
