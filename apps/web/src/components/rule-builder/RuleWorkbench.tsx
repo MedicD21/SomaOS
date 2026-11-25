@@ -144,7 +144,7 @@ export function RuleWorkbench(p: Props) {
 
       <section aria-label={`Compare versions of ${p.label}`} className="space-y-3">
         <h4 className="text-base font-semibold">Compare versions</h4>
-        <CompareVersions uid={p.uid} kind={p.kind} versions={p.versions} />
+        <CompareVersions key={p.versions.map((v) => `${v.version}:${v.status}`).join(',')} uid={p.uid} kind={p.kind} versions={p.versions} />
       </section>
 
       {p.draftVersion !== null && p.canApprove && (

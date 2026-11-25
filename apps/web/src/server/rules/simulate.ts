@@ -1,6 +1,6 @@
 import 'server-only';
 import {
-  accrualPeriods, addDays, comparePatterns, localDateOf, projectAccrual, samplePay,
+  accrualPeriods, addDays, comparePatterns, localDateOf, projectAccrual, samplePay, workPeriodOf,
   type AccrualFacts, type AccrualPolicy, type PayResult, type PayRules, type ShiftPattern, type WorkType,
 } from '@soma/schedule-engine';
 import { accrualPolicySchema, payRulesSchema, shiftPatternSchema } from '@soma/validators';
@@ -48,7 +48,8 @@ export async function simulatePay(tx: Tx, input: PaySimInput): Promise<{ sim: Pa
   const notes = ['A pay period uses the rules in force on its first day.'];
 
   if (input.mode === 'sample') {
-    const start = addDays(input.today, 0);
+    // Start at the beginning of a work period so the made-up shifts never straddle a threshold reset.
+    const start = workPeriodOf(input.draft.workPeriod, input.today).start;
     const spec = { hourlyRate: input.hourlyRate, start, shifts: input.shifts };
     const a = approved ? samplePay(approved, spec) : null;
     const d = samplePay(input.draft, spec);

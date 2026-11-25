@@ -46,7 +46,7 @@ export function PatternWorkbench({
 
       <section aria-label="Compare pattern versions" className="space-y-3">
         <h4 className="text-base font-semibold">Compare versions</h4>
-        <CompareVersions uid="pattern" kind="pattern" versions={versions} shiftKeys={shiftKeys} />
+        <CompareVersions key={versions.map((v) => `${v.version}:${v.status}`).join(',')} uid="pattern" kind="pattern" versions={versions} shiftKeys={shiftKeys} />
       </section>
 
       {draftVersion !== null && canApprove && (
