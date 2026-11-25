@@ -63,10 +63,17 @@ export async function loadTrades(tx: Tx): Promise<TradeView[]> {
     (ShiftRow & { m2_id: string; m2_member_id: string; m2_member_name: string; m2_start: Date; m2_end: Date; m2_type: string; m2_seat: string; m2_unit: string; m2_tz: string;
       trade_id: string; status: string; note: string | null; decision_note: string | null; created_at: Date; requester_id: string; counterparty_id: string; can_decide: boolean })[]
   >`
-    select t.id as trade_id, t.status, t.note, t.decision_note, t.created_at, t.requester_id, t.counterparty_id, app.can_decide_trade(t.id) as can_decide,
+    -- Pick the newest trades first (and decide per trade only for those), then join by primary key. Without the materialised
+    -- step the planner can start from the whole roster and run the row-level-security checks for every shift.
+    with t as materialized (
+      select t.id, t.tenant_id, t.status, t.note, t.decision_note, t.created_at, t.requester_id, t.counterparty_id,
+             t.requester_assignment_id, t.counterparty_assignment_id, app.can_decide_trade(t.id) as can_decide
+      from shift_trades t order by t.created_at desc limit 100
+    )
+    select t.id as trade_id, t.status, t.note, t.decision_note, t.created_at, t.requester_id, t.counterparty_id, t.can_decide,
            a1.id, a1.member_id, m1.last_name || ', ' || m1.first_name as member_name, lower(a1.during) as start, upper(a1.during) as "end", a1.type, s1.label as seat, o1.name as unit, coalesce(o1.timezone, tn.timezone) as tz,
            a2.id as m2_id, a2.member_id as m2_member_id, m2.last_name || ', ' || m2.first_name as m2_member_name, lower(a2.during) as m2_start, upper(a2.during) as m2_end, a2.type as m2_type, s2.label as m2_seat, o2.name as m2_unit, coalesce(o2.timezone, tn.timezone) as m2_tz
-    from shift_trades t
+    from t
     join tenants tn on tn.id = t.tenant_id
     join shift_assignments a1 on a1.id = t.requester_assignment_id
     join shift_assignments a2 on a2.id = t.counterparty_assignment_id
@@ -74,7 +81,7 @@ export async function loadTrades(tx: Tx): Promise<TradeView[]> {
     join members m2 on m2.id = a2.member_id
     join seats s1 on s1.id = a1.seat_id join org_units o1 on o1.id = s1.org_unit_id
     join seats s2 on s2.id = a2.seat_id join org_units o2 on o2.id = s2.org_unit_id
-    order by t.created_at desc limit 100`;
+    order by t.created_at desc`;
   const me = (await tx<{ id: string | null }[]>`select app.my_member_id() as id`)[0]?.id ?? null;
   return rows.map((r) => ({
     id: r.trade_id,

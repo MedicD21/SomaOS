@@ -93,7 +93,7 @@ export async function loadSubmission(tx: Tx, id: string): Promise<SubmissionDeta
   const decisions = await tx<SubmissionDetail['decisions']>`
     select d.decision, d.note, d.decided_at as "decidedAt",
            (select mm.first_name || ' ' || mm.last_name from members mm where mm.user_id = d.decided_by and mm.tenant_id = d.tenant_id limit 1) as "decidedBy"
-    from form_decisions d where d.submission_id = ${id} order by d.decided_at, d.id`;
+    from form_decisions d where d.submission_id = ${id} order by d.step, d.decided_at`;
   const [can] = await tx<{ ok: boolean }[]>`
     select (${s.approval} = 'officer' and app.can_approve_at(${s.orgUnitId}::uuid) and ${s.mine} = false
             and not exists (select 1 from form_decisions where submission_id = ${id})) as ok`;

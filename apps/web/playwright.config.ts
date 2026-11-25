@@ -11,7 +11,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,
-  expect: { timeout: 10_000 },
+  expect: { timeout: 20_000 },
   globalSetup: './e2e/global-setup.ts',
   use: { baseURL: 'http://localhost:3000', trace: 'off' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

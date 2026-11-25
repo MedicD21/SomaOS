@@ -249,7 +249,7 @@ create trigger audit after insert on public.form_decisions
 
 create view public.form_status with (security_invoker = true) as
   select s.id as submission_id, s.tenant_id,
-         coalesce((select d.decision from public.form_decisions d where d.submission_id = s.id order by d.decided_at desc, d.id desc limit 1), 'submitted') as status
+         coalesce((select d.decision from public.form_decisions d where d.submission_id = s.id order by d.step desc, d.decided_at desc limit 1), 'submitted') as status
   from public.form_submissions s;
 grant select on public.form_status to authenticated, service_role;
 
