@@ -44,9 +44,9 @@ const as = <T>(tx: Tx, w: { t: string }, who: { u: string }, fn: () => Promise<T
 async function futureSession(tx: Tx, w: W, members: Who[], days = 2): Promise<string> {
   const start = new Date(Date.now() + days * 86_400_000);
   const end = new Date(start.getTime() + 2 * 3_600_000);
-  const [{ id }] = await tx<{ id: string }[]>`
+  const id = (await tx<{ id: string }[]>`
     select app.create_training_session(${w.course}, 'Engine drill', ${start.toISOString()}, ${end.toISOString()}, null, null, null, null, false, 2, null,
-      ${tx.json(members.map((m) => ({ kind: 'member', ref_id: m.m })) as never)}) as id`;
+      ${tx.json(members.map((m) => ({ kind: 'member', ref_id: m.m })) as never)}) as id`)[0]!.id;
   await tx`select app.publish_training_session(${id})`;
   return id;
 }
@@ -170,9 +170,9 @@ describe('compliance inputs', () => {
     await as(tx, w, w.mgr, async () => {
       const start = new Date(Date.now() - 3 * 3_600_000);
       const end = new Date(start.getTime() + 2 * 3_600_000);
-      [{ id }] = await tx<{ id: string }[]>`
+      id = (await tx<{ id: string }[]>`
         select app.create_training_session(${w.course}, 'Past drill', ${start.toISOString()}, ${end.toISOString()}, null, null, null, null, false, 2, null,
-          ${tx.json([w.a, w.b, w.c].map((m) => ({ kind: 'member', ref_id: m.m })) as never)}) as id`;
+          ${tx.json([w.a, w.b, w.c].map((m) => ({ kind: 'member', ref_id: m.m })) as never)}) as id`)[0]!.id;
       await tx`select app.publish_training_session(${id})`;
       for (const m of [w.a, w.b, w.c]) {
         const [e] = await tx<{ id: string }[]>`select id from training_enrollments where session_id = ${id} and member_id = ${m.m}`;

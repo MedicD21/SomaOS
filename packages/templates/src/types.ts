@@ -4,6 +4,7 @@ import type { InventoryTemplate } from './inventory';
 import type { LeaveTemplate } from './leave';
 import type { PayTemplate } from './pay';
 import type { DocumentsTemplate } from './documents';
+import type { TrainingTemplate } from './training';
 
 export type DepartmentTemplate = {
   key: string;
@@ -20,4 +21,5 @@ export type DepartmentTemplate = {
   leave: LeaveTemplate;
   pay: PayTemplate;
   documents: DocumentsTemplate;
+  training: TrainingTemplate;
 };

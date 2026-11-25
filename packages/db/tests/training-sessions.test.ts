@@ -101,15 +101,15 @@ describe('creating, publishing and the audience', () => {
       let id = '';
       await as(tx, w, w.officerA, async () => {
         id = await mk(tx, w, { audience: [{ kind: 'rank', ref_id: w.rank }, { kind: 'member', ref_id: w.m1.m }] });
-        const [{ n }] = await publish(tx, id);
+        const n = (await publish(tx, id))[0]!.n;
         expect(n).toBe(2); // m1 matches twice but is enrolled once
       });
       expect((await tx`select 1 from notifications where member_id = ${w.m1.m} and kind = 'training'`).length).toBe(1);
       await tx`update members set rank_id = ${w.rank} where id = ${w.m3.m}`;
       await as(tx, w, w.officerA, async () => {
-        const [{ n }] = await tx<{ n: number }[]>`select app.refresh_training_required(${id}) as n`;
+        const n = (await tx<{ n: number }[]>`select app.refresh_training_required(${id}) as n`)[0]!.n;
         expect(n).toBe(1);
-        const [{ n: again }] = await tx<{ n: number }[]>`select app.refresh_training_required(${id}) as n`;
+        const again = (await tx<{ n: number }[]>`select app.refresh_training_required(${id}) as n`)[0]!.n;
         expect(again).toBe(0);
       });
       await tx`update members set rank_id = null where id = ${w.m2.m}`;
@@ -129,7 +129,7 @@ describe('sign-up, capacity and the waitlist', () => {
       let id = '';
       await as(tx, w, w.officerA, async () => {
         const start = new Date(Date.now() + 48 * 3_600_000);
-        [{ id }] = await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Future class', ${start.toISOString()}, ${new Date(start.getTime() + 7_200_000).toISOString()}, ${w.s1}, null, null, 1, false, 2, null, '[]'::jsonb) as id`;
+        id = (await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Future class', ${start.toISOString()}, ${new Date(start.getTime() + 7_200_000).toISOString()}, ${w.s1}, null, null, 1, false, 2, null, '[]'::jsonb) as id`)[0]!.id;
         await publish(tx, id);
       });
       const signUp = (who: Who) => as(tx, w, who, async () => (await tx<{ s: string }[]>`select app.sign_up_training(${id}) as s`)[0]!.s);
@@ -159,8 +159,8 @@ describe('sign-up, capacity and the waitlist', () => {
       await as(tx, w, w.officerA, async () => {
         const start = new Date(Date.now() + 48 * 3_600_000);
         const end = new Date(start.getTime() + 7_200_000);
-        [{ id: draft }] = await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Draft', ${start.toISOString()}, ${end.toISOString()}, ${w.s1}, null, null, null, false, 2, null, '[]'::jsonb) as id`;
-        [{ id: assigned }] = await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Assigned', ${start.toISOString()}, ${end.toISOString()}, ${w.s1}, null, null, null, true, 2, null, '[]'::jsonb) as id`;
+        draft = (await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Draft', ${start.toISOString()}, ${end.toISOString()}, ${w.s1}, null, null, null, false, 2, null, '[]'::jsonb) as id`)[0]!.id;
+        assigned = (await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Assigned', ${start.toISOString()}, ${end.toISOString()}, ${w.s1}, null, null, null, true, 2, null, '[]'::jsonb) as id`)[0]!.id;
         await publish(tx, assigned);
         started = await mk(tx, w);
         await publish(tx, started);
@@ -254,7 +254,7 @@ describe('marking attendance', () => {
         old = await mk(tx, w, { startedHoursAgo: 24 * 40, audience: [{ kind: 'member', ref_id: w.m1.m }] });
         await publish(tx, old);
         const start = new Date(Date.now() + 48 * 3_600_000);
-        [{ id: future }] = await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Soon', ${start.toISOString()}, ${new Date(start.getTime() + 7_200_000).toISOString()}, ${w.s1}, null, null, null, false, 2, null, ${tx.json([{ kind: 'member', ref_id: w.m1.m }])}) as id`;
+        future = (await tx<{ id: string }[]>`select app.create_training_session(${w.course}, 'Soon', ${start.toISOString()}, ${new Date(start.getTime() + 7_200_000).toISOString()}, ${w.s1}, null, null, null, false, 2, null, ${tx.json([{ kind: 'member', ref_id: w.m1.m }])}) as id`)[0]!.id;
         await publish(tx, future);
       });
       const e = await enrollmentOf(tx, id, w.m1.m);
@@ -332,9 +332,9 @@ describe('completion awards credentials', () => {
       const id = await ready(tx, w);
       await as(tx, w, w.officerA, async () => { await mark(tx, await enrollmentOf(tx, id, w.m1.m)); });
       await as(tx, w, w.trainingMgr, async () => {
-        const [{ n }] = await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`;
+        const n = (await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`)[0]!.n;
         expect(n).toBe(1);
-        const [{ n: again }] = await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`;
+        const again = (await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`)[0]!.n;
         expect(again).toBe(0);
       });
       const creds = await tx<{ expires_on: string; status: string }[]>`select expires_on::text, status from member_credentials where member_id = ${w.m1.m}`;
@@ -390,7 +390,7 @@ describe('completion awards credentials', () => {
         await mark(tx, await enrollmentOf(tx, id, w.m1.m));
       });
       await as(tx, w, w.officerA, async () => {
-        const [{ n }] = await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`;
+        const n = (await tx<{ n: number }[]>`select app.complete_training_session(${id}, ${tx.json(award(w.m1.m) as never)}) as n`)[0]!.n;
         expect(n).toBe(0);
       });
       expect((await tx`select 1 from member_credentials where tenant_id = ${w.t}`).length).toBe(0);

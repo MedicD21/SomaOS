@@ -120,6 +120,25 @@ export async function applyTemplate(
              select ${tenantId}, ${l.name}, ${l.kind}
              where not exists (select 1 from stock_locations where tenant_id = ${tenantId} and name = ${l.name} and parent_id is null)`;
   }
+  // Starter training catalog (idempotent). Example requirements start next January 1 so nothing is overdue before edited.
+  const tr = template.training;
+  for (const c of tr.categories) {
+    await tx`insert into training_categories (tenant_id, key, label, external_code) values (${tenantId}, ${c.key}, ${c.label}, ${c.externalCode})
+             on conflict (tenant_id, key) do nothing`;
+  }
+  for (const c of tr.courses) {
+    await tx`insert into training_courses (tenant_id, key, label, category_id, default_hours, credential_type_id, description)
+             select ${tenantId}, ${c.key}, ${c.label}, (select id from training_categories where tenant_id = ${tenantId} and key = ${c.categoryKey}),
+                    ${c.defaultHours},
+                    (select id from credential_types where tenant_id = ${tenantId} and key = ${c.credentialTypeKey}), ${c.description}
+             where not exists (select 1 from training_courses where tenant_id = ${tenantId} and key = ${c.key})`;
+  }
+  for (const r of tr.requirements) {
+    await tx`insert into training_requirements (tenant_id, label, category_id, required_hours, span, effective_from)
+             select ${tenantId}, ${r.label}, (select id from training_categories where tenant_id = ${tenantId} and key = ${r.categoryKey}),
+                    ${r.requiredHours}, ${tx.json(r.window as never)}, make_date(extract(year from current_date)::int + 1, 1, 1)
+             where not exists (select 1 from training_requirements where tenant_id = ${tenantId} and label = ${r.label})`;
+  }
   await tx`update tenant_settings set enabled_modules = ${template.enabledModules}
            where tenant_id = ${tenantId} and enabled_modules = '{}'`;
 

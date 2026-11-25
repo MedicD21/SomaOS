@@ -19,3 +19,4 @@ export * from './asset';
 export * from './checklist';
 export * from './inventory';
 export * from './custody';
+export * from './training';

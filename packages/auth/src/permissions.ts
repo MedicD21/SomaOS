@@ -56,6 +56,14 @@ export const PERMISSIONS = {
   'inventory.stock.view': { label: 'View stock levels and low-stock lists', module: 'inventory' },
   'inventory.stock.use': { label: 'Use and move stock', module: 'inventory' },
   'inventory.stock.manage': { label: 'Receive, adjust and set par levels', module: 'inventory' },
+  // Training. Course catalog and requirements are department-wide; sessions and attendance are scoped to a unit.
+  'training.course.view': { label: 'View the training catalog and requirements', module: 'training' },
+  'training.course.manage': { label: 'Manage training categories, courses and requirements', module: 'training' },
+  'training.session.view': { label: 'View published training sessions and sign up', module: 'training' },
+  'training.session.manage': { label: 'Create, run and cancel training sessions at a unit', module: 'training' },
+  'training.attendance.mark': { label: 'Mark attendance for training at a unit', module: 'training' },
+  'training.attendance.manage': { label: 'Mark or correct any attendance, including your own and old sessions', module: 'training', sensitive: 'HR' },
+  'training.compliance.view': { label: 'See who is due or overdue for required training', module: 'training', sensitive: 'HR' },
   'notifications.send': { label: 'Send notifications', module: 'notifications' },
 } as const satisfies Record<string, PermissionInfo>;
 
