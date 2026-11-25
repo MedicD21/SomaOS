@@ -332,6 +332,7 @@ Plan: `docs/superpowers/plans/2026-11-24-phase-1d-trades.md`. Page: `/trades`.
   assignments and the trade.
 - **Afterwards:** swapped shifts become type `trade` (paid by the pay rules' `trade` mapping) with a line in their
   explain trail; both members are notified at each step.
+- **Known limit:** the "Their shift" list shows the next 60 days of other members' shifts, capped at 2000 rows (a 150-member department can exceed that); a picker that filters by member or date is the follow-up.
 - **Not yet:** hours-owed/payback trades, one-way give-aways and open vacancy fill with call-back lists (1d-2), leave
   limits per shift or station (1d-3), per-member trade limits.
 - **Existing departments:** the new permission is in the starter roles; a department created earlier must add
