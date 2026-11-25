@@ -59,3 +59,41 @@ describe('scheduling templates', () => {
     expect(roles.company_officer).not.toContain('scheduling.config.manage');
   });
 });
+
+describe('documents and forms starter pack', () => {
+  it('has the standard folders (HR restricted) and three valid forms, signed where the statement is set', async () => {
+    const { formFieldsSchema } = await import('@soma/validators');
+    for (const t of Object.values(TEMPLATES)) {
+      expect(t.documents.folders.map((f) => f.name)).toEqual(['Policies and SOGs', 'Forms Library', 'Training', 'HR']);
+      expect(t.documents.folders.find((f) => f.name === 'HR')?.viewPermission).toBe('admin.members.manage');
+      expect(t.documents.forms.map((f) => f.key)).toEqual(['incident_injury_report', 'vehicle_damage_report', 'equipment_issue_receipt']);
+      for (const form of t.documents.forms) {
+        expect(formFieldsSchema.safeParse(form.fields).success, form.key).toBe(true);
+        if (form.requiresSignature) expect((form.signatureStatement ?? '').length, form.key).toBeGreaterThanOrEqual(10);
+      }
+      expect(t.documents.forms.map((f) => f.approval)).toEqual(['officer', 'officer', 'none']);
+      expect(t.enabledModules).toEqual(expect.arrayContaining(['documents', 'forms']));
+    }
+  });
+
+  it('document and form permissions land only on the intended roles', () => {
+    const roles = Object.fromEntries(TEMPLATES['career-3-platoon'].roles.map((r) => [r.key, r.permissions]));
+    for (const key of ['member', 'volunteer', 'probationary']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.view', 'sog.acknowledge', 'forms.submit']));
+      for (const p of ['documents.manage', 'documents.publish', 'documents.backdate', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve', 'forms.view_all']) {
+        expect(roles[key], `${key}/${p}`).not.toContain(p);
+      }
+    }
+    for (const key of ['chief_officer', 'training_officer']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.manage', 'documents.publish', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve']));
+      expect(roles[key], key).not.toContain('documents.backdate');
+    }
+    for (const key of ['shift_commander', 'company_officer']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.view', 'sog.report', 'forms.approve', 'forms.submit', 'sog.acknowledge']));
+      expect(roles[key], key).not.toContain('documents.manage');
+    }
+    expect(roles.auditor).toEqual(expect.arrayContaining(['documents.view', 'sog.report', 'forms.view_all']));
+    expect(roles.dept_admin).toEqual(expect.arrayContaining(['documents.backdate', 'forms.manage', 'forms.view_all']));
+    expect(roles.external).toEqual([]);
+  });
+});

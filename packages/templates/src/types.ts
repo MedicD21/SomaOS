@@ -2,6 +2,7 @@ import type { Permission } from '@soma/auth';
 import type { ShiftPattern, Validity } from '@soma/schedule-engine';
 import type { LeaveTemplate } from './leave';
 import type { PayTemplate } from './pay';
+import type { DocumentsTemplate } from './documents';
 
 export type DepartmentTemplate = {
   key: string;
@@ -16,4 +17,5 @@ export type DepartmentTemplate = {
   schedulePattern: { key: string; payload: ShiftPattern } | null;
   leave: LeaveTemplate;
   pay: PayTemplate;
+  documents: DocumentsTemplate;
 };
