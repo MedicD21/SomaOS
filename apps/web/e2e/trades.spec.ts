@@ -70,12 +70,14 @@ test('propose, accept, officer scope, qualification block and override, swap, de
   await propose.getByLabel('Note (optional)').fill('Family event');
   await propose.getByRole('button', { name: 'Propose trade' }).click();
   const pending = page.getByRole('list', { name: 'Your pending trades' });
-  // Surface the form's own error text if the proposal is refused (makes CI-only failures diagnosable).
-  await expect(async () => {
-    const alert = propose.getByRole('alert');
-    if ((await alert.count()) > 0) throw new Error(`Propose was refused: ${await alert.first().textContent()}`);
-    await expect(pending).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 30_000 });
+  // Surface what the page shows if the proposal never appears (makes CI-only failures diagnosable).
+  try {
+    await expect(pending).toBeVisible({ timeout: 30_000 });
+  } catch (e) {
+    const text = await page.locator('main').innerText();
+    const db = await sql`select status, requester_assignment_id, counterparty_assignment_id from shift_trades order by created_at desc limit 3`;
+    throw new Error(`Pending trade list never appeared. Page: ${text.slice(0, 1500)} | trades in db: ${JSON.stringify(db)} | ${String(e).slice(0, 200)}`);
+  }
   await expect(pending.getByRole('listitem')).toContainText('Waiting for the other member', SLOW);
   await expectAccessible(page);
 
