@@ -170,3 +170,22 @@ begin
 end $$;
 revoke execute on function app.decide_leave(uuid, boolean, text, text) from public, anon;
 grant execute on function app.decide_leave(uuid, boolean, text, text) to authenticated;
+
+-- The limit status of one pending request, for the approvals screen: days where approving would reach
+-- or exceed a limit (over = exceeds). The caller must be able to decide this member's leave.
+create or replace function app.leave_request_limits(p_request uuid)
+returns table (day date, label text, max_concurrent int, on_leave int, over boolean)
+language plpgsql stable security definer set search_path = '' as $$
+#variable_conflict use_column
+declare v_req public.leave_requests;
+begin
+  select * into v_req from public.leave_requests where id = p_request and tenant_id = app.tenant_id();
+  if v_req.id is null or not app.can_decide_leave(v_req.member_id) then raise exception 'not in your scope'; end if;
+  return query
+  select c.day, c.label, c.max_concurrent, c.on_leave, c.over
+  from app.leave_limit_check(v_req.member_id, v_req.start_date, v_req.end_date, v_req.leave_type_id) c
+  where c.on_leave + 1 >= c.max_concurrent
+  order by c.day, c.label;
+end $$;
+revoke execute on function app.leave_request_limits(uuid) from public, anon;
+grant execute on function app.leave_request_limits(uuid) to authenticated;

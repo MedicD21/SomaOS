@@ -232,3 +232,22 @@ describe('leave_limits table', () => {
     });
   });
 });
+
+describe('leave_request_limits (approvals screen)', () => {
+  it('lists days at or over a limit for a request the caller may decide, and refuses others', async () => {
+    await withAdmin(async (tx) => {
+      const w = await world(tx);
+      await limit(tx, w.t, { max: 2, label: 'Cap two' });
+      await leaveFor(tx, w.t, w.members[0]!.m, w.vac, 'approved');
+      const second = await leaveFor(tx, w.t, w.members[1]!.m, w.vac, 'pending');
+      await as(tx, w, w.officer, async () => {
+        const rows = await tx<{ label: string; on_leave: number; over: boolean }[]>`select label, on_leave, over from app.leave_request_limits(${second})`;
+        expect(rows).toEqual([{ label: 'Cap two', on_leave: 1, over: false }]);                 // at the limit, not over
+        await expectDbError(tx, /not in your scope/, () => tx`select * from app.leave_request_limits(${crypto.randomUUID()})`);
+      });
+      await as(tx, w, w.members[2]!, async () => {
+        await expectDbError(tx, /not in your scope/, () => tx`select * from app.leave_request_limits(${second})`);
+      });
+    });
+  });
+});

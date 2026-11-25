@@ -355,3 +355,23 @@ Plan: `docs/superpowers/plans/2026-11-25-phase-1d2-open-shifts.md`. Page: `/open
 - **Visibility:** open shifts are visible to claim-permission holders and to officers of the seat's unit; claims to the claimant and those officers.
 - **Not yet:** call-back lists and mandatory hold-over ordering, special pay rules for open shifts, leave limits (1d-3).
 - **Existing departments:** add `scheduling.openshift.claim` to their member roles (Admin → Roles).
+
+## Leave limits (Phase 1d-3)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-1d3-leave-limits.md`. Admin: **Admin → Leave → Leave limits**.
+
+- **What it is:** a cap on how many members may be on **approved** leave on the same day, for the whole department or a
+  station subtree (`org_unit`, includes sub-units), optionally for one shift and/or one leave type, from a start date.
+  A limit of `0` means no one may be off. Archive a limit to lift it.
+- **Members can always request.** The limit is enforced when an approver **approves**: `app.decide_leave` refuses with
+  `Leave limit: "<label>" allows at most N member(s) on leave on <date> (M already approved)` when any day of the request
+  would exceed it. Exactly at the limit is allowed; one over is refused.
+- **Counting:** a member counts for a day when an approved request covers that date (pending, denied and cancelled do not).
+  A member's scope is where they work now (primary assignment, else standing seat), the same rule as leave approval; a
+  leave-type limit only counts, and only applies to, that type. The request's own member is never counted against themselves.
+- **Override:** a department-wide `leave.manage` holder can approve anyway by giving a reason (5+ characters); the database
+  re-checks the permission and records `Limit override: <reason>` in the request's decision note. Plain approvers cannot waive.
+- **Approvals screen:** each pending request shows the days where approving would reach or exceed a limit
+  (`app.leave_request_limits`); the override field appears only for managers on a request that is over.
+- **Not yet:** seniority-based auto-approval, waitlists, per-leave-type fairness, limits driven by actual roster staffing.
+- `app.decide_leave` now takes an optional 4th argument (override reason); the 3-argument call still works.
