@@ -70,6 +70,12 @@ test('propose, accept, officer scope, qualification block and override, swap, de
   await propose.getByLabel('Note (optional)').fill('Family event');
   await propose.getByRole('button', { name: 'Propose trade' }).click();
   const pending = page.getByRole('list', { name: 'Your pending trades' });
+  // Surface the form's own error text if the proposal is refused (makes CI-only failures diagnosable).
+  await expect(async () => {
+    const alert = propose.getByRole('alert');
+    if ((await alert.count()) > 0) throw new Error(`Propose was refused: ${await alert.first().textContent()}`);
+    await expect(pending).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
   await expect(pending.getByRole('listitem')).toContainText('Waiting for the other member', SLOW);
   await expectAccessible(page);
 
