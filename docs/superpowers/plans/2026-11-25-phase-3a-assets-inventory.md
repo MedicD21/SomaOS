@@ -128,8 +128,11 @@ Server modules stay thin: validate with zod, open the request transaction with t
 - Photos and signatures on checks; PowerSync offline rig checks and mobile UI; barcode/QR/RFID tags.
 - Issued gear and PPE per member, kits as serialized assets, depreciation and warranty, ePCR supply decrement, importers from Frontline and Operative IQ.
 
-## Open questions for the owner
+## Decisions (owner, 2026-11-25)
+1. **A failed rig-check item never changes status by itself.** Truck in/out of service is an ordinary asset *status* set by a person (via `record_asset_event`); checklist results stay informational. Seed the status set `in_service`, `out_of_service`, `reserve`, `maintenance`.
+2. **Locations are readable department-wide; inventory is entered against a chosen station.** Reads of asset and stock locations are not station-restricted. When recording a stock movement or a checklist, the member selects their station (stock location) from a list of all stations; writes still need the scope check at the chosen location's org unit.
+3. **Starter pack:**
+   - Asset types: Apparatus (engine, ambulance, ...), Cardiac monitor, Cot / stretcher, Ballistic vest, Turnout gear, plus a generic Equipment type. Types carry custom fields (serial number, size, issue/expiry date, assigned member for personal gear such as vests and turnout gear).
+   - Checklists: **Daily Truck Check** (basic, generic items: exterior/tires/lights, fluids, cab, radios, SCBA/airpacks, monitor and O2 present, cot, medical bags) and a **Drug Inventory** check (a per-unit count/seal verification checklist: item, expected qty, counted qty, seal/lot/expiry checked, initials). Both are editable templates; every item list is a starter value to customize.
+   - **Scope note for Drug Inventory:** in 3a this is only a checklist with recorded counts. Chain of custody, waste witnessing, and discrepancy handling for controlled substances remain Phase 3b; the checklist completion must reference the unit/stock location so 3b can attach to it.
 
-1. Should a failed rig-check item ever auto-set the asset out of service (per-item flag), or stay informational until work orders exist?
-2. Should stations see only their own stock locations by default (current plan: scope by the location's org unit) or department-wide read?
-3. Which asset types and first real checklists (engine, ambulance) should seed the starter pack?
