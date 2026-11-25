@@ -13,7 +13,7 @@ export const IDLE: ActionResult = { ok: null, message: null };
 
 /** Maps database errors to messages a department admin can act on. */
 const LEAVE_MESSAGES =
-  /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero)/i;
+  /^(No scheduled shifts|insufficient balance|lead time:|not in your scope|the end date is before|that leave has already started|A seat was refilled|this request is already|a reason is required|unknown leave type|not a member of this department|explain the adjustment|enter a non-zero|leave limit:|an override reason|not allowed: overriding a leave limit)/i;
 
 /** Plain-English messages raised by the asset, checklist and inventory functions. */
 const INVENTORY_MESSAGES =

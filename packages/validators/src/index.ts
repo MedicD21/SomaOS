@@ -6,6 +6,7 @@ export * from './people';
 export * from './files';
 export * from './scheduling';
 export * from './leave';
+export * from './leave-limits';
 export * from './password';
 export * from './pay';
 export * from './time';

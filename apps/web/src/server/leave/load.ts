@@ -48,6 +48,14 @@ export async function loadPending(tx: Tx): Promise<PendingRequest[]> {
   return [...rows];
 }
 
+export type LimitDay = { day: string; label: string; max_concurrent: number; on_leave: number; over: boolean };
+
+/** Days where approving this request would reach or exceed a leave limit (empty when no limit applies). */
+export async function loadLimitStatus(tx: Tx, requestId: string): Promise<LimitDay[]> {
+  const rows = await tx<LimitDay[]>`select day::text, label, max_concurrent, on_leave, over from app.leave_request_limits(${requestId})`;
+  return [...rows];
+}
+
 /** "Dec 10" or "Dec 10 – Dec 12, 2026". Dates are plain calendar days, shown without time-zone shifts. */
 export function dateRange(start: string, end: string): string {
   const f = (d: string, withYear: boolean) =>

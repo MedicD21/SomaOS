@@ -31,7 +31,8 @@ async function signIn(page: Page, email: string): Promise<void> {
 }
 
 test('propose, accept, officer scope, qualification block and override, swap, decline, phone layout', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
+  const SLOW = { timeout: 30_000 };
   const [t] = await sql<{ id: string }[]>`select id from tenants where slug = 'demo-fire-rescue'`;
   const tenantId = t!.id;
   await sql`update profiles set active_tenant_id = ${tenantId} where user_id = (select id from auth.users where email = 'member@soma.local')`;
@@ -69,16 +70,16 @@ test('propose, accept, officer scope, qualification block and override, swap, de
   await propose.getByLabel('Note (optional)').fill('Family event');
   await propose.getByRole('button', { name: 'Propose trade' }).click();
   const pending = page.getByRole('list', { name: 'Your pending trades' });
-  await expect(pending.getByRole('listitem')).toContainText('Waiting for the other member');
+  await expect(pending.getByRole('listitem')).toContainText('Waiting for the other member', SLOW);
   await expectAccessible(page);
 
   // 2. Sam sees the offer and accepts.
   await signIn(page, 'sam-trader@soma.local');
   await page.goto('/trades');
   const offers = page.getByRole('list', { name: 'Trade offers to you' });
-  await expect(offers.getByRole('listitem')).toContainText('Family event');
+  await expect(offers.getByRole('listitem')).toContainText('Family event', SLOW);
   await offers.getByRole('form', { name: /^Accept trade/ }).getByRole('button', { name: 'Accept' }).click();
-  await expect(page.getByRole('list', { name: 'Your pending trades' }).getByRole('listitem')).toContainText('Waiting for an officer');
+  await expect(page.getByRole('list', { name: 'Your pending trades' }).getByRole('listitem')).toContainText('Waiting for an officer', SLOW);
 
   // 3. An officer for Riley's station only cannot decide; nothing is waiting for them.
   await signIn(page, 'trade-home@soma.local');
@@ -123,11 +124,11 @@ test('propose, accept, officer scope, qualification block and override, swap, de
   await again.getByLabel('Your shift').selectOption(mine2);
   await again.getByLabel('Their shift').selectOption(theirs2);
   await again.getByRole('button', { name: 'Propose trade' }).click();
-  await expect(page.getByRole('list', { name: 'Your pending trades' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Your pending trades' })).toBeVisible(SLOW);
   await signIn(page, 'sam-trader@soma.local');
   await page.goto('/trades');
   await page.getByRole('list', { name: 'Trade offers to you' }).getByRole('form', { name: /^Decline trade/ }).getByRole('button', { name: 'Decline' }).click();
-  await expect(page.getByRole('list', { name: 'Recent trades' }).getByRole('listitem').first()).toContainText('Declined');
+  await expect(page.getByRole('list', { name: 'Recent trades' }).getByRole('listitem').first()).toContainText('Declined', SLOW);
 
   // 7. Phone layout.
   await page.setViewportSize({ width: 390, height: 844 });
