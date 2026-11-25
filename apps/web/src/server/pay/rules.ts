@@ -12,8 +12,8 @@ export const listRuleVersions = (tx: Tx, groupKey: string): Promise<RulesVersion
 export const saveRulesDraft = (tx: Tx, groupKey: string, payload: PayRules): Promise<number> => saveDraft(tx, RULES_KIND, groupKey, payload);
 
 /** Approves a draft from a local date; the previous version is closed at that instant. */
-export const approveRulesDraft = (tx: Tx, groupKey: string, version: number, effectiveDate: IsoDate): Promise<void> =>
-  approveDraft(tx, RULES_KIND, groupKey, version, effectiveDate, `Pay rules ${groupKey} v${version} approved effective ${effectiveDate}`);
+export const approveRulesDraft = (tx: Tx, groupKey: string, version: number, effectiveDate: IsoDate, note = ''): Promise<void> =>
+  approveDraft(tx, RULES_KIND, groupKey, version, effectiveDate, `Pay rules ${groupKey} v${version} approved effective ${effectiveDate}.${note}`);
 
 /** A neutral starting point for a group with no rules yet. Edit every number, then approve. */
 export const BLANK_RULES: PayRules = {

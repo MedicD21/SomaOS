@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accrualPolicySchema, issuesToFieldErrors, parseJsonDocument, payRulesSchema } from '../src';
+import { accrualPolicySchema, issuesToFieldErrors, parseJsonDocument, payRulesSchema, unknownPaths } from '../src';
 
 const rules = {
   payPeriod: { kind: 'fixed_days', days: 14, anchor: '2026-01-01' },
@@ -59,5 +59,18 @@ describe('parseJsonDocument', () => {
     const bad = parseJsonDocument('{ "a": ');
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.error).toMatch(/^That is not valid JSON/);
+  });
+});
+
+describe('unknownPaths', () => {
+  it('lists keys in the hand-edited document that the schema does not know', () => {
+    const raw = { ...rules, extra: 1, workPeriod: { ...rules.workPeriod, note: 'x' }, assignments: { ...rules.assignments, regular: { code: 'reg', multiplier: 1, bonus: 2 } } };
+    const parsed = payRulesSchema.parse(raw);
+    expect(unknownPaths(raw, parsed)).toEqual(['assignments.regular.bonus', 'extra', 'workPeriod.note']);
+  });
+
+  it('is empty when nothing extra was typed, and handles arrays', () => {
+    expect(unknownPaths(rules, payRulesSchema.parse(rules))).toEqual([]);
+    expect(unknownPaths({ tiers: [{ a: 1, b: 2 }] }, { tiers: [{ a: 1 }] })).toEqual(['tiers.0.b']);
   });
 });

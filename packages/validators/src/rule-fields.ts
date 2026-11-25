@@ -30,3 +30,22 @@ export function parseJsonDocument(text: string): { ok: true; value: unknown } | 
     return { ok: false, error: `That is not valid JSON: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
+
+/**
+ * Dotted paths present in the typed document but absent from the schema-parsed one (zod strips unknown
+ * keys). The editor warns about them and keeps them in the stored document; engines ignore them.
+ */
+export function unknownPaths(raw: unknown, parsed: unknown, path = ''): string[] {
+  if (Array.isArray(raw)) {
+    const p = Array.isArray(parsed) ? parsed : [];
+    return raw.flatMap((item, i) => unknownPaths(item, p[i], path ? `${path}.${i}` : String(i)));
+  }
+  if (raw !== null && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    const p = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    return Object.keys(r)
+      .sort()
+      .flatMap((k) => (k in p ? unknownPaths(r[k], p[k], path ? `${path}.${k}` : k) : [path ? `${path}.${k}` : k]));
+  }
+  return [];
+}

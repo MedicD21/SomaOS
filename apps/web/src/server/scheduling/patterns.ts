@@ -63,6 +63,7 @@ export async function approvePatternDraft(
   version: number,
   effectiveDate: IsoDate,
   today: IsoDate,
+  note = '',
 ): Promise<{ superseded: number }> {
   const [draft] = await tx<{ id: string }[]>`
     select id from config_versions
@@ -83,7 +84,7 @@ export async function approvePatternDraft(
   }
   if (effectiveDate < today) throw new ActionError('The effective date cannot be in the past.');
 
-  await tx`select set_config('app.reason', ${`Pattern v${version} approved effective ${effectiveDate}`}, true)`;
+  await tx`select set_config('app.reason', ${`Pattern v${version} approved effective ${effectiveDate}.${note}`}, true)`;
   if (current) {
     await tx`update config_versions set effective = tstzrange(lower(effective), ${effectiveDate}::timestamp at time zone ${tz})
              where id = ${current.id} and (upper_inf(effective) or upper(effective) > ${effectiveDate}::timestamp at time zone ${tz})`;
