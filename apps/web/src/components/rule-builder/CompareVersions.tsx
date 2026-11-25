@@ -77,7 +77,7 @@ export function CompareVersions({ uid, kind, versions, shiftKeys = [] }: { uid: 
       {changes.length === 0 ? (
         <p role="status" className="text-sm">No settings differ between these versions.</p>
       ) : (
-        <div className="relative max-w-full overflow-x-auto">
+        <div role="region" aria-label="Differences between the versions" tabIndex={0} className="relative max-w-full overflow-x-auto">
           <table className="w-full min-w-[28rem] text-left text-sm">
             <caption className="sr-only">Settings that differ between {a ? name(a) : 'nothing'} and {name(b)}</caption>
             <thead>

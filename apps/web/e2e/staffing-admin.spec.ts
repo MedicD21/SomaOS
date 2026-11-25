@@ -201,11 +201,11 @@ test('pattern change takes effect from its date', async ({ page }) => {
   await expect(approve.getByRole('button', { name: 'Approve v2' })).toBeEnabled();
 
   // Approval cannot precede the current version.
-  await approve.getByLabel('Effective from').fill('2025-06-01');
+  await approve.getByLabel('Takes effect on').fill('2025-06-01');
   await approve.getByRole('button', { name: 'Approve v2' }).click();
   await expect(approve.getByRole('alert')).toContainText('after');
 
-  await approve.getByLabel('Effective from').fill(switchDate);
+  await approve.getByLabel('Takes effect on').fill(switchDate);
   await approve.getByRole('button', { name: 'Approve v2' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Approved v2' })).toContainText(`Approved v2 effective ${switchDate}`);
   await expect(versions.getByRole('row', { name: /v1/ })).toContainText(`to ${addDays(switchDate, -1)}`);

@@ -5,12 +5,15 @@ import { expectAccessible, login, loginAdmin } from './helpers';
 const TZ = 'America/New_York';
 const DAY = 86_400_000;
 
-/** The calendar month containing "today + 35 days" (department zone), so lead times never interfere. */
+/** The first whole calendar month that starts at least 8 days ahead (department zone), so lead times never interfere. */
 function targetMonth(): { first: string; last: string; dayAfterLast: string } {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
-  const t = new Date(Date.parse(`${today}T00:00:00Z`) + 35 * DAY);
-  const first = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1));
-  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0));
+  // The first full calendar month that starts at least 8 days from today, so the 7-day lead time never
+  // interferes whatever day of the month the suite runs (a month containing today + 35 days can start 6 days out).
+  const earliest = new Date(Date.parse(`${today}T00:00:00Z`) + 8 * DAY);
+  let first = new Date(Date.UTC(earliest.getUTCFullYear(), earliest.getUTCMonth(), 1));
+  if (first.getTime() < earliest.getTime()) first = new Date(Date.UTC(earliest.getUTCFullYear(), earliest.getUTCMonth() + 1, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { first: iso(first), last: iso(last), dayAfterLast: iso(new Date(last.getTime() + DAY)) };
 }

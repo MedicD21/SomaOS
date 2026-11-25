@@ -17,7 +17,7 @@ function Cell({ c, what }: { c: PaySimColumn | null; what: 'hours' | 'amount' })
 function PayResult({ sim }: { sim: PaySim }) {
   return (
     <div className="space-y-3">
-      <div className="relative max-w-full overflow-x-auto">
+      <div role="region" aria-label="Pay simulation results" tabIndex={0} className="relative max-w-full overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left text-sm">
           <caption className="mb-2 text-left font-medium">{sim.heading}: approved rules and the draft side by side</caption>
           <thead>
@@ -72,7 +72,7 @@ function PayResult({ sim }: { sim: PaySim }) {
 
 function AccrualResult({ sim }: { sim: AccrualSim }) {
   return (
-    <div className="relative max-w-full overflow-x-auto">
+    <div role="region" aria-label="Accrual simulation results" tabIndex={0} className="relative max-w-full overflow-x-auto">
       <table className="w-full min-w-[34rem] text-left text-sm">
         <caption className="mb-2 text-left font-medium">{sim.heading}: approved policy and the draft side by side</caption>
         <thead>
@@ -120,7 +120,7 @@ function PatternResult({ sim }: { sim: PatternSim }) {
         On duty {hrs(sim.approvedHours)} now, {hrs(sim.draftHours)} with the draft.
         Approving would withdraw <strong>{sim.replaced}</strong> generated shift{sim.replaced === 1 ? '' : 's'} from tomorrow; regenerate the roster afterwards.
       </p>
-      <div className="relative max-h-80 max-w-full overflow-auto">
+      <div role="region" aria-label="Pattern simulation results" tabIndex={0} className="relative max-h-80 max-w-full overflow-auto">
         <table className="w-full text-left text-sm">
           <caption className="mb-2 text-left font-medium">{sim.heading}</caption>
           <thead>
