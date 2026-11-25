@@ -3,6 +3,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    # Plan and doc-only changes do not need the DB and browser suites.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+# A newer push to the same PR cancels the older run (pushes to main are never cancelled).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # A newer push to the same PR cancels the older run. Pushes to main always finish.
 concurrency:
