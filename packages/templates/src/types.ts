@@ -3,6 +3,7 @@ import type { ShiftPattern, Validity } from '@soma/schedule-engine';
 import type { InventoryTemplate } from './inventory';
 import type { LeaveTemplate } from './leave';
 import type { PayTemplate } from './pay';
+import type { DocumentsTemplate } from './documents';
 
 export type DepartmentTemplate = {
   key: string;
@@ -18,4 +19,5 @@ export type DepartmentTemplate = {
   inventory: InventoryTemplate;
   leave: LeaveTemplate;
   pay: PayTemplate;
+  documents: DocumentsTemplate;
 };

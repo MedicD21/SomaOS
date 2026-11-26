@@ -82,6 +82,18 @@ export async function applyTemplate(
                      ${tx.json(r.payload as never)}, 'Starter values from the department template — review before approving')
              on conflict (tenant_id, kind, key, version) do nothing`;
   }
+  // Starter folders and forms (idempotent: nothing that already exists is touched). Forms start published at version 1.
+  for (const f of template.documents.folders) {
+    await tx`insert into document_folders (tenant_id, name, view_permission)
+             select ${tenantId}, ${f.name}, ${f.viewPermission}
+             where not exists (select 1 from document_folders where tenant_id = ${tenantId} and parent_id is null and lower(name) = lower(${f.name}))`;
+  }
+  for (const f of template.documents.forms) {
+    await tx`insert into form_definitions (tenant_id, key, version, label, description, fields, requires_signature, signature_statement, approval, status, published_at)
+             select ${tenantId}, ${f.key}, 1, ${f.label}, ${f.description}, ${tx.json(f.fields as never)}, ${f.requiresSignature}, ${f.signatureStatement},
+                    ${f.approval}, 'published', now()
+             where not exists (select 1 from form_definitions where tenant_id = ${tenantId} and key = ${f.key})`;
+  }
   const inv = template.inventory;
   for (const t of inv.assetTypes) {
     await tx`insert into asset_types (tenant_id, key, label, category) values (${tenantId}, ${t.key}, ${t.label}, ${t.category})

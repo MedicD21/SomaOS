@@ -22,6 +22,10 @@ const INVENTORY_MESSAGES =
 const TIME_MESSAGES =
   /^(That pay period|That time entry|not allowed: you cannot|not allowed: pay\.manage|hours must be|unknown work type|choose the date|explain the time|explain why|unknown member|unknown time entry|unknown pay period|unknown leave bank|invalid pay period|that is not one of|that shift was not found|choose a shift|only upcoming|one of those shifts|that member has separated|only the member asked|this trade|that trade|only the members in|not in your scope|an override reason|overriding needs|that seat is not available|open shifts can only|the end must be after|only upcoming times|an open shift can be|explain the open shift|explain the cancellation|that open shift is|that seat is already filled|that seat and time is already|you are already scheduled|you already have a claim|only the member who claimed|this claim is|unknown open shift|unknown claim)/i;
 
+/** Documents, readings and forms: the database functions word their own errors for people. */
+const DOC_MESSAGES =
+  /^(That document is archived|Upload the file first|That file is already used|Enter a |A folder cannot|Choose who|No active members|The due date|That version already|Only a (published|draft) version|That reading|You have already|A newer version|Type your full name|Draw your signature|Choose how to sign|This form must be signed|That form is not|You can only correct|That submission|A correction must|The form |Unknown (field|approval)|Answers must|Explain |Choose approve|unknown (form|submission|version|reading|document|folder)|not allowed: (documents|sog|forms)\.|not allowed: only the submitter|.+ is required$|.+ must (be|only|not)\b)/;
+
 export function friendlyDbError(e: unknown): string {
   if (e instanceof ActionError) return e.message;
   const msg = e instanceof Error ? e.message : String(e);
@@ -39,6 +43,7 @@ export function friendlyDbError(e: unknown): string {
   // The leave functions raise plain-English messages meant for people; pass them through.
   if (TIME_MESSAGES.test(msg) || INVENTORY_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
+  if (DOC_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';
   console.error(e);
   return 'Something went wrong saving your change.';

@@ -11,24 +11,28 @@ const INV_FLOOR: Permission[] = [...INV_READ, 'inventory.check.perform', 'invent
 const INV_OFFICER: Permission[] = [...INV_FLOOR, 'inventory.asset.event'];
 const INV_MANAGER: Permission[] = [...INV_OFFICER, 'inventory.asset.manage', 'inventory.check.manage', 'inventory.stock.manage'];
 const LEAVE_APPROVER: Permission[] = ['leave.request', 'leave.approve', 'leave.view'];
+/** Reading and filling in what the department publishes. */
+const READER: Permission[] = ['documents.view', 'sog.acknowledge', 'forms.submit'];
+/** Running the library: manage and publish documents, assign reading, build forms, approve and report. */
+const LIBRARIAN: Permission[] = ['documents.manage', 'documents.publish', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve'];
 const OFFICER: Permission[] = ['admin.members.view', 'files.view', 'files.upload', 'notifications.send'];
 
 /** Default roles from the master design §5.5. Departments clone and edit these. */
 export const DEFAULT_ROLES: DepartmentTemplate['roles'] = [
   { key: 'dept_admin', label: 'Department Admin', permissions: [...ALL_PERMISSIONS] },
-  { key: 'chief_officer', label: 'Chief Officer', permissions: [...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...INV_OFFICER, 'scheduling.qualification.override', 'admin.members.manage', 'admin.audit.view', 'admin.config.manage'] },
-  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: [...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...INV_OFFICER] },
-  { key: 'company_officer', label: 'Company Officer', permissions: [...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...INV_OFFICER] },
-  { key: 'member', label: 'Member', permissions: [...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...INV_FLOOR] },
-  { key: 'volunteer', label: 'Volunteer', permissions: [...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...INV_FLOOR] },
-  { key: 'probationary', label: 'Probationary', permissions: [...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...INV_FLOOR] },
-  { key: 'scheduler', label: 'Scheduler', permissions: [...OFFICER, ...ROSTER, 'scheduling.config.manage', 'scheduling.qualification.override'] },
-  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, 'admin.members.manage', 'admin.custom_fields.manage', 'credentials.view', 'credentials.manage', 'scheduling.roster.view', 'leave.request', 'leave.view', 'leave.manage', 'pay.view', 'pay.manage'] },
-  { key: 'training_officer', label: 'Training Officer', permissions: [...OFFICER, 'credentials.view', 'credentials.manage'] },
-  { key: 'logistics_officer', label: 'Logistics / Inventory Officer', permissions: [...OFFICER, ...INV_MANAGER] },
-  { key: 'ems_officer', label: 'EMS Officer / QA Reviewer', permissions: OFFICER },
+  { key: 'chief_officer', label: 'Chief Officer', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, ...LIBRARIAN, 'scheduling.qualification.override', 'admin.members.manage', 'admin.audit.view', 'admin.config.manage'] },
+  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
+  { key: 'company_officer', label: 'Company Officer', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
+  { key: 'member', label: 'Member', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
+  { key: 'volunteer', label: 'Volunteer', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
+  { key: 'probationary', label: 'Probationary', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
+  { key: 'scheduler', label: 'Scheduler', permissions: [...OFFICER, ...ROSTER, ...READER, 'scheduling.config.manage', 'scheduling.qualification.override'] },
+  { key: 'payroll_hr', label: 'Payroll / HR', permissions: [...OFFICER, ...READER, 'admin.members.manage', 'admin.custom_fields.manage', 'credentials.view', 'credentials.manage', 'scheduling.roster.view', 'leave.request', 'leave.view', 'leave.manage', 'pay.view', 'pay.manage'] },
+  { key: 'training_officer', label: 'Training Officer', permissions: [...OFFICER, ...READER, ...LIBRARIAN, 'credentials.view', 'credentials.manage'] },
+  { key: 'logistics_officer', label: 'Logistics / Inventory Officer', permissions: [...INV_MANAGER, ...OFFICER, ...READER] },
+  { key: 'ems_officer', label: 'EMS Officer / QA Reviewer', permissions: [...OFFICER, ...READER] },
   { key: 'medical_director', label: 'Medical Director', permissions: VIEW },
   { key: 'fleet_maintenance', label: 'Fleet / Maintenance', permissions: [...VIEW, ...INV_MANAGER] },
-  { key: 'auditor', label: 'Read-only Auditor', permissions: ['admin.members.view', 'admin.audit.view', 'files.view', ...INV_READ] },
+  { key: 'auditor', label: 'Read-only Auditor', permissions: ['admin.members.view', 'admin.audit.view', 'files.view', 'documents.view', 'sog.report', 'forms.view_all', ...INV_READ] },
   { key: 'external', label: 'External / Mutual Aid', permissions: [] },
 ];
