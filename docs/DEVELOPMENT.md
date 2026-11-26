@@ -574,3 +574,68 @@ step-up PIN or biometric witnessing, barcode and smart-safe ingest.
 
 Tests: `packages/db/tests/{cs-catalog,cs-ledger,cs-counts}.test.ts` (including the tamper test and the concurrent last-units race),
 `packages/validators/tests/custody.test.ts`, `apps/web/tests/db/custody.test.ts`, `apps/web/e2e/custody.spec.ts`.
+
+
+## Training (Phase 4b)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-4b-training.md`. Pages: `/training`, `/training/[sessionId]`, `/training/compliance`, `/admin/training`.
+Replaces NinthBrain's training scheduling. Module key `training`; turn it on in Admin → Settings.
+
+### Data model
+- **Catalog (department-wide config, archive never delete):** `training_categories` (free-text `external_code`), `training_courses` (default hours, optional credential type granted on completion, `completion_rule.minHoursPct`), `training_requirements` (hours per category for a rank and/or role, a window, an effective date range; one open requirement per category+rank+role is enforced by an exclusion constraint). Written only by `app.save_training_*` / `archive_training_*` (department-wide `training.course.manage`).
+- **Sessions:** `training_sessions` (draft → scheduled → completed / cancelled), `training_audience_rules` (rank, role, shift, org unit, member), `training_enrollments` (`required`, `signed_up`, `added`; `enrolled`, `waitlisted`, `withdrawn`).
+- **Attendance** is **insert-only** (`training_attendance`; a trigger rejects update, delete and truncate even for the table owner). A correction is a new row with `supersedes_id`; the newest row per enrollment wins (`training_attendance_current`). **Hours are the view `training_hours`**, never a cached total, and a cancelled session's hours disappear from it.
+- **Awards** (`training_awards`, insert-only, unique per session and member) record each credential granted or renewed.
+
+### Who can do what (checked in SQL, not only in the web layer)
+| Action | Needs |
+|---|---|
+| Create, publish, reschedule, cancel a session; add attendees; complete | `training.session.manage` at the session's unit (department-wide for department-wide sessions) |
+| Mark attendance | `training.attendance.mark` or `.manage` at the unit, or being the session's instructor. **Nobody marks their own** unless they hold department-wide `training.attendance.manage` |
+| Correct attendance after the correction window (30 days after the session ends, `app.training_correction_days()`) | department-wide `training.attendance.manage` |
+| Award credentials on completion | `credentials.manage` (department-wide) as well |
+| Put enrolled members on the roster | department-wide `scheduling.roster.edit` as well |
+| Sign up / withdraw | any holder of `training.session.view` |
+| See compliance | `training.compliance.view`: yourself always, your unit's members, or everyone for a department-wide grant |
+
+Published sessions are visible to every `training.session.view` holder; **drafts only to managers at the unit and the instructor** (members hold a department-wide view grant, so "view" must not reveal drafts).
+
+### Attendance, completion and credentials
+- `attended` defaults to the full session length; `partial` needs hours and a note (5+ characters); `absent` and `excused` are 0 hours. Hours can never exceed the session length. Only `enrolled` members can be marked, after the session has started.
+- **Complete** marks the session done and, for each attendee with at least `minHoursPct` of the session's hours, **inserts a new `member_credentials` row** and an award. The web layer computes issue and expiry dates with the same `credentialExpiry` rule as the credentials pages and shows a preview first. A renewal never edits or shortens an existing credential. Completing again awards nothing twice. Attendance changed after an award is flagged on the session page and never revokes the credential automatically.
+
+### Waitlist
+`sign_up_training` locks the session row, enrols up to `capacity` and waitlists the rest in order (`queued_at` uses `clock_timestamp()` so same-moment sign-ups keep their order). Withdrawing promotes the first waitlisted member and notifies them. Required members always count toward capacity.
+
+### Compliance
+`windowFor` and `trainingCompliance` in `packages/schedule-engine/src/training.ts` are one pure rule used by both the compliance page and the reminder job. Windows: `calendar_year`, `rolling_months`, `fixed_cycle` (cycles end on month/day every N years, counted from the requirement's effective date; Feb 29 falls back to Feb 28). Status: `met`, `on_track`, `due_soon` (within 30 days of the window end), `overdue`. A window that just ended short stays `overdue` for a 30-day grace, then the new window takes over and earlier hours do not carry forward. A rolling window has no end, so a shortfall is overdue immediately. Hours outside the window, in another category, or from cancelled sessions do not count.
+The page lists only members the caller may see (`app.training_compliance_members`, `app.training_compliance_hours`) and exports the rows on screen as CSV (free text that starts with `=`, `+`, `-` or `@` is defused).
+
+### Reminders (worker `training-reminders`, daily)
+Per department with the module on: requirement reminders at `due_soon` and `overdue` (one per member, requirement, window and level, logged in `training_reminder_log` so a rerun sends nothing), a daily digest to each officer holding `training.compliance.view` listing overdue members in their scope, and a reminder to enrolled members of any session starting within 24 hours.
+
+### Roster link
+`app.schedule_training_assignments` inserts seatless `training` assignments for enrolled members and relies on the roster's own overlap rule: a member already working is **skipped with a reason**, never overridden (kelly days do not block, matching the roster). Cancelling the session, or a member withdrawing, cancels only those linked rows. Note: nothing in the database stops roster assignments in a closed pay period, so the roster link does not check payroll locks.
+
+### Starter data (examples to edit)
+Seven categories, six example courses (CPR renewal grants the CPR credential) and two **example requirements that start next January 1**, so an unedited example can never produce an overdue notice. No hour figure is a verified ISO, state or NCCP requirement; category codes are free text.
+
+### Defaults applied from the plan's open questions
+1. **NinthBrain import is not built.** It needs a sample export from the department (fields, category names, how credentials are recorded). Recommended: one-time CSV of completed records and current credentials through a preview-and-map screen; no live sync.
+2. Hour categories: neutral starter set with free-text external codes.
+3. Attendance: assigned instructor and officers with scope; nobody marks themselves except a department-wide training manager.
+4. Credential awarded when an officer clicks complete, after a preview; later edits flag but never revoke.
+5. Self sign-up for every published class (waitlist past capacity) except "by assignment only"; withdrawal until the start.
+6. Roster assignments are optional per session and never override.
+7. Correction window 30 days; department-wide managers can correct older rows.
+8. Reminder cadence as above (the plan's "30 days before the window ends" is the `due_soon` threshold).
+9. No proration for volunteers or part-time; use a smaller hour value on a volunteer role's requirement.
+
+### Existing departments
+Add the `training.*` permissions to your roles (Admin → Roles) and turn the module on. Starter roles already carry them: members get catalog and session view, unit officers run sessions and see their unit's compliance, Training Officer manages everything.
+
+### Not built
+NinthBrain importer, competency programs and task books, instructor qualification checks, quizzes and LMS content, external CE sync (CAPCE, NREMT), QR or offline attendance, recurring series, room and equipment booking, cost tracking, an edit form for an existing course or session (archive and recreate, or reschedule a session).
+
+### Tests
+`packages/db/tests/training-{catalog,sessions,roster}.test.ts`, `packages/schedule-engine/tests/training.test.ts`, `packages/validators/tests/training.test.ts`, `apps/worker/tests/db/training-reminders.test.ts`, `apps/web/tests/db/training.test.ts`, `apps/web/e2e/training.spec.ts`.

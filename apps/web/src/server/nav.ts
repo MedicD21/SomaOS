@@ -14,6 +14,8 @@ export const NAV: NavItem[] = [
   { href: '/open-shifts', label: 'Open shifts', module: 'scheduling', anyOf: ['scheduling.openshift.claim', 'scheduling.roster.edit'] },
   { href: '/pay', label: 'Pay', module: 'pay', anyOf: ['pay.view', 'pay.manage'] },
   { href: '/time', label: 'Time', module: 'pay', anyOf: ['scheduling.roster.edit', 'pay.manage'] },
+  { href: '/training', label: 'Training', module: 'training', anyOf: ['training.session.view', 'training.session.manage'] },
+  { href: '/training/compliance', label: 'Compliance', module: 'training', anyOf: ['training.compliance.view'] },
   { href: '/documents', label: 'Documents', module: 'documents', anyOf: ['documents.view', 'documents.manage'] },
   { href: '/sogs', label: 'SOGs', module: 'documents', anyOf: ['sog.acknowledge', 'sog.report', 'sog.assign'] },
   { href: '/forms', label: 'Forms', module: 'forms', anyOf: ['forms.submit', 'forms.approve', 'forms.manage', 'forms.view_all'] },
@@ -27,7 +29,7 @@ export const NAV: NavItem[] = [
     href: '/admin',
     label: 'Admin',
     module: 'admin',
-    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage', 'pay.manage', 'forms.manage', 'inventory.asset.manage', 'inventory.check.manage', 'inventory.stock.manage', 'custody.manage'],
+    anyOf: ['admin.tenant.manage', 'admin.org.manage', 'admin.members.view', 'admin.roles.manage', 'admin.audit.view', 'admin.custom_fields.manage', 'scheduling.config.manage', 'leave.manage', 'pay.manage', 'forms.manage', 'inventory.asset.manage', 'inventory.check.manage', 'inventory.stock.manage', 'custody.manage', 'training.course.manage'],
   },
 ];
 
@@ -47,6 +49,7 @@ export const ADMIN_NAV: (NavItem & { anyOf: Permission[] })[] = [
   { href: '/admin/leave', label: 'Leave', module: 'leave', anyOf: ['leave.manage'] },
   { href: '/admin/pay', label: 'Pay', module: 'pay', anyOf: ['pay.manage'] },
   { href: '/admin/form-definitions', label: 'Form builder', module: 'forms', anyOf: ['forms.manage'] },
+  { href: '/admin/training', label: 'Training', module: 'training', anyOf: ['training.course.manage'] },
   { href: '/admin/assets', label: 'Asset types', module: 'inventory', anyOf: ['inventory.asset.manage'] },
   { href: '/admin/checklists', label: 'Checklists', module: 'inventory', anyOf: ['inventory.check.manage'] },
   { href: '/admin/inventory', label: 'Items and locations', module: 'inventory', anyOf: ['inventory.stock.manage'] },

@@ -5,3 +5,4 @@ export * from './roster';
 export * from './credentials';
 export * from './accrual';
 export * from './pay';
+export * from './training';

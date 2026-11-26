@@ -131,3 +131,34 @@ describe('documents and forms starter pack', () => {
     expect(TEMPLATES.volunteer.enabledModules).not.toContain('custody');
   });
 });
+
+describe('training templates', () => {
+  const roles = (key: keyof typeof TEMPLATES) => Object.fromEntries(TEMPLATES[key].roles.map((r) => [r.key, r.permissions]));
+
+  it('members browse and sign up; unit officers run sessions; trainers manage; auditors only read', () => {
+    const r = roles('career-3-platoon');
+    expect(r.member).toEqual(expect.arrayContaining(['training.course.view', 'training.session.view']));
+    expect(r.member).not.toContain('training.session.manage');
+    expect(r.member).not.toContain('training.compliance.view');
+    expect(r.company_officer).toEqual(expect.arrayContaining(['training.session.manage', 'training.attendance.mark', 'training.compliance.view']));
+    expect(r.company_officer).not.toContain('training.course.manage');
+    expect(r.company_officer).not.toContain('training.attendance.manage');
+    expect(r.training_officer).toEqual(expect.arrayContaining(['training.course.manage', 'training.attendance.manage', 'training.session.manage']));
+    expect(r.auditor).toEqual(expect.arrayContaining(['training.course.view', 'training.compliance.view']));
+    expect(r.auditor).not.toContain('training.session.manage');
+    expect(r.external).not.toContain('training.session.view');
+  });
+
+  it('both templates enable training and ship editable starter data with valid references', () => {
+    for (const t of Object.values(TEMPLATES)) {
+      expect(t.enabledModules).toContain('training');
+      const cats = new Set(t.training.categories.map((c) => c.key));
+      const creds = new Set(t.credentialTypes.map((c) => c.key));
+      for (const c of t.training.courses) {
+        expect(cats.has(c.categoryKey), c.key).toBe(true);
+        if (c.credentialTypeKey) expect(creds.has(c.credentialTypeKey), c.key).toBe(true);
+      }
+      for (const r of t.training.requirements) expect(cats.has(r.categoryKey), r.label).toBe(true);
+    }
+  });
+});
