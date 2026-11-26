@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActionForm } from '@/components/action-form';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
-import { approvePattern, savePattern } from './actions';
+import { savePattern } from './actions';
 
 export type PatternValues = {
   cycle: ('on' | 'off')[];
@@ -67,19 +67,6 @@ export function PatternForm({ initial, shifts, platoonLabel }: {
             <Input id="pat-kelly" name="kellyEvery" type="number" min={2} max={30} defaultValue={initial.kelly?.everyNthShift} />
           </Field>
         </div>
-      )}
-    </ActionForm>
-  );
-}
-
-export function ApproveForm({ version, defaultDate }: { version: number; defaultDate: string }) {
-  return (
-    <ActionForm action={approvePattern.bind(null, version)} label="Approve pattern" submitLabel={`Approve v${version}`}>
-      {(e) => (
-        <Field id="pat-approve-date" label="Effective from" error={e.effectiveFrom}
-          hint="The current version ends the day before. Generated shifts from this date are withdrawn; regenerate afterwards to recreate them.">
-          <Input id="pat-approve-date" name="effectiveFrom" type="date" defaultValue={defaultDate} required />
-        </Field>
       )}
     </ActionForm>
   );

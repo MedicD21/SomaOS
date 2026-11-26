@@ -60,13 +60,22 @@ test('admin sets up pay, previews a pay period, exports it, and members cannot s
 
   await expect(page.getByTestId('rules-status-default')).toContainText('Draft v1');
   const editor = page.getByRole('form', { name: 'Edit pay rules for All members' });
+  await editor.getByRole('button', { name: 'Advanced JSON' }).click();
   await editor.getByLabel('Rules (JSON)').fill('{ "workPeriod": ');
   await editor.getByRole('button', { name: 'Save draft' }).click();
   await expect(editor.getByRole('alert')).toContainText('not valid JSON');
   await editor.getByLabel('Rules (JSON)').fill(JSON.stringify(RULES, null, 2));
   await editor.getByRole('button', { name: 'Save draft' }).click();
   await expect(editor.getByRole('status')).toContainText('Saved draft v1');
+  // Approving needs a simulation of exactly this draft first.
   const approve = page.getByRole('form', { name: 'Approve pay rules for All members v1' });
+  await expect(approve.getByRole('button', { name: 'Approve rules' })).toBeDisabled();
+  const sim = page.getByRole('form', { name: 'Simulate pay rules for All members' });
+  await sim.getByLabel('A date in the pay period').fill('2026-01-05');
+  await sim.getByRole('button', { name: 'Simulate draft v1' }).click();
+  await expect(sim.getByRole('status')).toContainText('Simulated draft v1');
+  await expect(page.getByTestId('simulation-result')).toContainText('Medic, Riley');
+  await expect(approve.getByRole('button', { name: 'Approve rules' })).toBeEnabled();
   await approve.getByLabel('Takes effect on').fill('2026-01-01');
   await approve.getByRole('button', { name: 'Approve rules' }).click();
   await expect(page.getByTestId('rules-status-default')).toContainText('Approved v1 from 2026-01-01');

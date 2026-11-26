@@ -3,7 +3,10 @@ import { Card } from '@/components/ui/card';
 import { check, getRequestContext, withCtxDb } from '@/server/context';
 import { BLANK_POLICY, listPolicyVersions, type PolicyVersion } from '@/server/leave/policies';
 import { localDateOf } from '@soma/schedule-engine';
-import { AddBankForm, AddLeaveTypeForm, AddLimitForm, AdjustForm, ArchiveBankForm, ArchiveLimitForm, ArchiveTypeForm, PolicyPanel } from './forms';
+import { RuleWorkbench } from '@/components/rule-builder/RuleWorkbench';
+import type { Doc } from '@/components/rule-builder/path';
+import { approvePolicy, savePolicy, simulateAccrualPolicy } from './actions';
+import { AddBankForm, AddLeaveTypeForm, AddLimitForm, AdjustForm, ArchiveBankForm, ArchiveLimitForm, ArchiveTypeForm } from './forms';
 
 type Bank = { id: string; key: string; label: string; archived: boolean };
 type Type = { id: string; label: string; bank_label: string | null; lead_time_days: number; requires_documentation: boolean; archived: boolean };
@@ -116,12 +119,18 @@ export default async function LeaveAdminPage() {
             <Card key={b.id}>
               <h3 className="text-base font-semibold">{b.label} policy</h3>
               <p data-testid={`policy-status-${b.key}`} className="mb-3 text-sm">{policyStatus(versions)}</p>
-              <PolicyPanel
-                bankKey={b.key}
-                bankLabel={b.label}
-                initialJson={JSON.stringify(basis?.payload ?? BLANK_POLICY, null, 2)}
+              <RuleWorkbench
+                kind="accrual"
+                uid={b.key}
+                label={b.label}
+                initial={(basis?.payload ?? BLANK_POLICY) as unknown as Doc}
                 draftVersion={draft?.version ?? null}
+                savedPayload={(draft?.payload ?? null) as unknown as Doc | null}
+                versions={versions.map((v) => ({ version: v.version, status: v.status, fromDate: v.fromDate, payload: v.payload }))}
+                suggestions={{ payCodes: [], banks: [] }}
+                members={data.members}
                 canApprove={canApprove}
+                actions={{ save: savePolicy, simulate: simulateAccrualPolicy, approve: approvePolicy }}
               />
             </Card>
           );

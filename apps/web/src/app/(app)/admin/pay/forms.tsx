@@ -1,7 +1,7 @@
 'use client';
 import { ActionForm } from '@/components/action-form';
 import { Field, Input, Select } from '@/components/ui/field';
-import { addGroup, addPayCode, approveRules, assignGroup, saveRules, setPayCodeArchived, setRate } from './actions';
+import { addGroup, addPayCode, assignGroup, setPayCodeArchived, setRate } from './actions';
 
 type Opt = { id: string; label: string };
 const KINDS = [['regular', 'Regular'], ['overtime', 'Overtime'], ['premium', 'Premium'], ['leave', 'Leave'], ['other', 'Other']] as const;
@@ -85,36 +85,5 @@ export function SetRateForm({ members }: { members: Opt[] }) {
         </div>
       )}
     </ActionForm>
-  );
-}
-
-export function RulesPanel({
-  groupKey, groupLabel, initialJson, draftVersion, canApprove,
-}: { groupKey: string; groupLabel: string; initialJson: string; draftVersion: number | null; canApprove: boolean }) {
-  return (
-    <div className="space-y-6">
-      <ActionForm action={saveRules.bind(null, groupKey)} label={`Edit pay rules for ${groupLabel}`} submitLabel="Save draft">
-        <Field id={`rules-${groupKey}`} label="Rules (JSON)" hint="Pay period, work period and overtime threshold, which pay code each kind of shift uses, and comp time. A guided editor is planned; for now edit the values below.">
-          <textarea
-            id={`rules-${groupKey}`}
-            name="rules"
-            rows={20}
-            spellCheck={false}
-            defaultValue={initialJson}
-            className="block w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm"
-          />
-        </Field>
-      </ActionForm>
-      {draftVersion !== null && canApprove && (
-        <ActionForm action={approveRules.bind(null, groupKey, draftVersion)} label={`Approve pay rules for ${groupLabel} v${draftVersion}`} submitLabel="Approve rules">
-          {(e) => (
-            <Field id={`ap-${groupKey}`} label="Takes effect on" hint="Pay periods starting on or after this date use these rules." error={e.effectiveFrom}>
-              <Input id={`ap-${groupKey}`} name="effectiveFrom" type="date" required />
-            </Field>
-          )}
-        </ActionForm>
-      )}
-      {draftVersion !== null && !canApprove && <p className="text-sm text-muted">Approving rules needs configuration approval permission.</p>}
-    </div>
   );
 }

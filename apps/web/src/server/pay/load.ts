@@ -74,7 +74,18 @@ export async function loadPayPeriod(tx: Tx, period: Period): Promise<PayPeriodRe
  * Runs as the signed-in user (RLS applies) and needs department-wide pay.view. Rules take effect at
  * the start of the pay period and a member's rate is the one in force on that day.
  */
-export async function calculatePayPeriod(tx: Tx, period: Period): Promise<PayPeriodResult> {
+export async function calculatePayPeriod(
+  tx: Tx,
+  period: Period,
+  opts: {
+    /** Use these rules for a group instead of the approved ones (simulation). */
+    rulesOverride?: ReadonlyMap<string, PayRules>;
+    /** Only this employee group's members. */
+    groupKey?: string;
+    /** Only this member. */
+    memberId?: string;
+  } = {},
+): Promise<PayPeriodResult> {
   const [can] = await tx<{ ok: boolean }[]>`select app.can_view_pay() as ok`;
   if (!can?.ok) throw new ActionError('Not allowed: pay.view required.');
 
@@ -82,11 +93,14 @@ export async function calculatePayPeriod(tx: Tx, period: Period): Promise<PayPer
     select m.id, m.first_name, m.last_name, m.employee_number, coalesce(g.key, 'default') as group_key, m.custom
     from members m left join employee_groups g on g.id = m.employee_group_id
     where m.tenant_id = app.tenant_id() and (m.status <> 'separated' or m.separated_on >= ${period.start}::date)
+      ${opts.groupKey ? tx`and coalesce(g.key, 'default') = ${opts.groupKey}` : tx``}
+      ${opts.memberId ? tx`and m.id = ${opts.memberId}` : tx``}
     order by m.last_name, m.first_name`;
 
   const rulesByGroup = new Map<string, { rules: PayRules } | { problem: string }>();
   for (const key of new Set(members.map((m) => m.group_key))) {
-    const v = await approvedOn<unknown>(tx, RULES_KIND, key, period.start);
+    const override = opts.rulesOverride?.get(key);
+    const v = override ? { payload: override as unknown } : await approvedOn<unknown>(tx, RULES_KIND, key, period.start);
     if (!v) {
       rulesByGroup.set(key, { problem: `No approved pay rules for group "${key}" on ${period.start}.` });
       continue;

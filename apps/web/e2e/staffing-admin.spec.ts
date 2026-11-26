@@ -190,13 +190,22 @@ test('pattern change takes effect from its date', async ({ page }) => {
   await expect(preview).toContainText('08:00');
   await expectAccessible(page);
 
-  // Approval cannot precede the current version.
+  // Approving needs a simulation of exactly this draft first.
   const approve = page.getByRole('form', { name: 'Approve pattern' });
-  await approve.getByLabel('Effective from').fill('2025-06-01');
+  await expect(approve.getByRole('button', { name: 'Approve v2' })).toBeDisabled();
+  const sim = page.getByRole('form', { name: 'Simulate the draft pattern' });
+  await sim.getByRole('button', { name: 'Simulate draft v2' }).click();
+  await expect(sim.getByRole('status')).toContainText('Simulated draft v2');
+  await expect(page.getByTestId('simulation-result')).toContainText('days added');
+  await expect(page.getByTestId('simulation-result')).toContainText('Approving would withdraw');
+  await expect(approve.getByRole('button', { name: 'Approve v2' })).toBeEnabled();
+
+  // Approval cannot precede the current version.
+  await approve.getByLabel('Takes effect on').fill('2025-06-01');
   await approve.getByRole('button', { name: 'Approve v2' }).click();
   await expect(approve.getByRole('alert')).toContainText('after');
 
-  await approve.getByLabel('Effective from').fill(switchDate);
+  await approve.getByLabel('Takes effect on').fill(switchDate);
   await approve.getByRole('button', { name: 'Approve v2' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Approved v2' })).toContainText(`Approved v2 effective ${switchDate}`);
   await expect(versions.getByRole('row', { name: /v1/ })).toContainText(`to ${addDays(switchDate, -1)}`);

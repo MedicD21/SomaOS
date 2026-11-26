@@ -39,6 +39,7 @@ test('admin manages leave banks, types, policy versions and balances', async ({ 
   // Policy: starter template values are drafts, invalid JSON is explained, valid JSON saves
   const editor = page.getByRole('form', { name: 'Edit Vacation policy' });
   await expect(page.getByTestId('policy-status-vacation')).toContainText('Draft');
+  await editor.getByRole('button', { name: 'Advanced JSON' }).click();
   await editor.getByLabel('Policy (JSON)').fill('{ "period": ');
   await editor.getByRole('button', { name: 'Save draft' }).click();
   await expect(editor.getByRole('alert')).toContainText('not valid JSON');
@@ -49,16 +50,24 @@ test('admin manages leave banks, types, policy versions and balances', async ({ 
   await editor.getByRole('button', { name: 'Save draft' }).click();
   await expect(editor.getByRole('status')).toContainText('Saved draft v1');
 
-  // Preview what a member would earn (uses the text in the box, saves nothing)
-  const preview = page.getByRole('form', { name: 'Preview Vacation policy' });
-  await preview.getByLabel('Hire date').fill('2019-03-01');
-  await preview.getByLabel('Month to preview').fill('2026-12-01');
-  await preview.getByRole('button', { name: 'Preview' }).click();
-  await expect(preview.getByRole('status')).toContainText('14 h earned');
-  await expect(preview.getByRole('status')).toContainText('year(s) of service');
+  // Approving needs a simulation of exactly this draft first.
+  const approve = page.getByRole('form', { name: 'Approve Vacation policy v1' });
+  await expect(approve.getByRole('button', { name: 'Approve policy' })).toBeDisabled();
+
+  // Simulate what a sample member would earn over 12 periods (runs the saved draft, saves nothing).
+  const sim = page.getByRole('form', { name: 'Simulate Vacation policy' });
+  await sim.getByLabel('Hire date').fill('2019-03-01');
+  await sim.getByLabel('Start from').fill('2026-12-01');
+  await sim.getByRole('button', { name: 'Simulate draft v1' }).click();
+  await expect(sim.getByRole('status')).toContainText('Simulated draft v1');
+  const result = page.getByTestId('simulation-result');
+  await expect(result.getByRole('table')).toContainText('14 h');
+  await expect(result).toContainText('No policy is approved for this bank yet');
+  await expect(result.getByRole('row')).toHaveCount(13);
+  await expectAccessible(page);
 
   // Approve from a date
-  const approve = page.getByRole('form', { name: 'Approve Vacation policy v1' });
+  await expect(approve.getByRole('button', { name: 'Approve policy' })).toBeEnabled();
   await approve.getByLabel('Takes effect on').fill('2026-01-01');
   await approve.getByRole('button', { name: 'Approve policy' }).click();
   // The draft is gone once approved, so the form disappears; the status line shows the result.

@@ -150,7 +150,8 @@ Approving cancels the member's scheduled shifts in the range (`cancelled_reason 
 `leave_request_id`), so the roster shows the vacancy; cancelling the leave puts them back.
 
 ### Accrual policy reference
-Edit as JSON under **Admin → Leave → Accrual policies** (a guided editor comes in Phase 1e). Example:
+Edit under **Admin → Leave → Accrual policies** with the guided form, or as JSON in its *Advanced JSON* view (both edit the
+same document; see *Guided rule builder*). Example of the JSON:
 
 ```json
 {
@@ -423,6 +424,49 @@ Plan: `docs/superpowers/plans/2026-11-25-phase-1d3-leave-limits.md`. Admin: **Ad
   (`app.leave_request_limits`); the override field appears only for managers on a request that is over.
 - **Not yet:** seniority-based auto-approval, waitlists, per-leave-type fairness, limits driven by actual roster staffing.
 - `app.decide_leave` now takes an optional 4th argument (override reason); the 3-argument call still works.
+
+## Guided rule builder (Phase 1e)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-1e-rule-builder.md`. Pages: **Admin → Pay**, **Admin → Leave**, **Admin → Shift patterns**.
+
+Pay rules, leave accrual policies and shift patterns are still plain versioned JSON in `config_versions` (draft → approve from a
+date). Nothing about storage changed; the builder is a way to edit, understand, test and compare those documents.
+
+- **Guided form** (`apps/web/src/components/rule-builder/`): `RuleForm` renders one section per `SectionSpec` in `specs.ts` (label, plain-English
+  help, unit, advice). Validation is the zod schema in `@soma/validators` (`issuesToFieldErrors` turns issues into per-field plain-English
+  messages). **Advanced JSON** is the same document in a textarea; switching views loses nothing. Settings the schema does not know
+  are kept as written and reported ("not used by the rules"). Patterns keep their existing guided form (cycle toggles, offsets, Kelly).
+- **What this means**: `describePayRules`, `describeAccrualPolicy`, `describePattern` (`@soma/schedule-engine`, pure, golden-tested) give
+  one sentence per rule and update as you type.
+- **Simulate** runs the **saved draft** next to the **approved** rules through the real engines and shows both side by side. It writes nothing
+  (a test counts rows before and after) and needs the same permission as seeing the real result (pay: `pay.view`/`pay.manage`; accrual:
+  `leave.manage`; patterns: `scheduling.config.manage`).
+  - *Pay*: real members for a pay period (`calculatePayPeriod` with a `rulesOverride`), or made-up sample shifts (`samplePay`).
+    A pay period uses the rules in force on its first day. A closed period shows a fresh calculation, not its frozen snapshot.
+  - *Accrual*: the next 12 periods for a real member (hire date and current balance) or sample facts (`projectAccrual`), with cap and carryover.
+  - *Pattern*: day-by-day on-duty comparison for one shift (`comparePatterns`) plus how many generated shifts approving would withdraw.
+- **Compare versions** shows any two versions setting by setting (`diffConfig`) and what changed in plain English. Read-only.
+- **Approve guard (server-enforced)**: approving re-loads the draft and checks its schema and **references** (pay codes exist and are not
+  archived, comp-time bank exists, every pattern platoon is a department shift with an offset), then verifies a **simulation token**
+  (`apps/web/src/server/rules/sim-token.ts`): an HMAC over tenant, kind, key, version, a hash of the exact draft, and the user, valid 30 minutes.
+  Saving the draft changes its hash, so a token dies when the draft is edited. The approval's audit reason records what was simulated and
+  the token's check code. The Approve button is disabled until a fresh token exists, but the server refuses without it (tested with a
+  forced click, a forged token, another user's token and an edited draft).
+  - **Secret**: `SOMA_SIM_TOKEN_SECRET` if set (16+ characters), otherwise derived from `SOMA_DB_URL` (server-only; it carries the database
+    password). With neither, signing throws and verifying refuses (fails closed). Set the variable explicitly in production.
+  - `SIMULATION_REQUIRED` in `apps/web/src/server/rules/guard.ts` is the single switch to relax the requirement later.
+- **Adding a field**: add it to the schema, then to a section in `specs.ts`; `apps/web/tests/rule-specs.test.ts` fails until every schema
+  setting has a spec and every spec points at a real setting.
+
+### Defaults applied (the plan's recommendations; change any of them in review)
+1. Simulation is required before approving all three kinds (no tenant switch yet). 2. For pay, any real period or the sample mode counts.
+3. No durable simulation record in v1 (the audit reason names it). 4. No new permission: whoever can see the real result can simulate.
+5. Unknown keys in hand-edited JSON are kept and reported; the schema still rejects invalid documents. 6. Sample inputs: a real member and
+period, plus one sample mode per kind; no payroll import. 7. A second person approving (drafter cannot approve their own draft) is not in 1e.
+
+### Not yet
+New rule kinds, drag-and-drop programming, importing rules from other systems, simulating rate changes or leave limits, multi-step
+approval chains, scheduled "approve on date", simulation history.
 
 ## Documents, SOGs and forms (Phase 4a)
 

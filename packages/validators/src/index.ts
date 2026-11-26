@@ -18,5 +18,6 @@ export * from './open-shift';
 export * from './asset';
 export * from './checklist';
 export * from './inventory';
+export * from './rule-fields';
 export * from './custody';
 export * from './training';

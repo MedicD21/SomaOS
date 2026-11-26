@@ -27,5 +27,5 @@ export const savePolicyDraft = (tx: Tx, bankKey: string, payload: AccrualPolicy)
  * Approves draft `version` from local midnight of `effectiveDate`. Past dates are allowed: the accrual
  * job then posts every completed period since that date (up to two years back).
  */
-export const approvePolicyDraft = (tx: Tx, bankKey: string, version: number, effectiveDate: IsoDate): Promise<void> =>
-  approveDraft(tx, POLICY_KIND, bankKey, version, effectiveDate, `Leave policy ${bankKey} v${version} approved effective ${effectiveDate}`);
+export const approvePolicyDraft = (tx: Tx, bankKey: string, version: number, effectiveDate: IsoDate, note = ''): Promise<void> =>
+  approveDraft(tx, POLICY_KIND, bankKey, version, effectiveDate, `Leave policy ${bankKey} v${version} approved effective ${effectiveDate}.${note}`);
