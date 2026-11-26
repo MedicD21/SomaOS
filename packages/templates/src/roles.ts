@@ -15,15 +15,18 @@ const LEAVE_APPROVER: Permission[] = ['leave.request', 'leave.approve', 'leave.v
 const READER: Permission[] = ['documents.view', 'sog.acknowledge', 'forms.submit'];
 /** Running the library: manage and publish documents, assign reading, build forms, approve and report. */
 const LIBRARIAN: Permission[] = ['documents.manage', 'documents.publish', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve'];
+/** Controlled-substance custody. Four separate permissions; Department Admin holds none by default. */
+const CUSTODY_FLOOR: Permission[] = ['custody.record', 'custody.witness'];
+const CUSTODY_OFFICER: Permission[] = ['custody.audit', 'custody.manage'];
 const OFFICER: Permission[] = ['admin.members.view', 'files.view', 'files.upload', 'notifications.send'];
 
 /** Default roles from the master design §5.5. Departments clone and edit these. */
 export const DEFAULT_ROLES: DepartmentTemplate['roles'] = [
-  { key: 'dept_admin', label: 'Department Admin', permissions: [...ALL_PERMISSIONS] },
+  { key: 'dept_admin', label: 'Department Admin', permissions: ALL_PERMISSIONS.filter((p) => !p.startsWith('custody.')) },
   { key: 'chief_officer', label: 'Chief Officer', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, ...LIBRARIAN, 'scheduling.qualification.override', 'admin.members.manage', 'admin.audit.view', 'admin.config.manage'] },
-  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
-  { key: 'company_officer', label: 'Company Officer', permissions: [...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
-  { key: 'member', label: 'Member', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
+  { key: 'shift_commander', label: 'Battalion / Shift Commander', permissions: [...CUSTODY_FLOOR, ...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
+  { key: 'company_officer', label: 'Company Officer', permissions: [...CUSTODY_FLOOR, ...INV_OFFICER, ...OFFICER, ...ROSTER, ...TRADE, ...LEAVE_APPROVER, ...READER, 'sog.report', 'forms.approve'] },
+  { key: 'member', label: 'Member', permissions: [...CUSTODY_FLOOR, ...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
   { key: 'volunteer', label: 'Volunteer', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
   { key: 'probationary', label: 'Probationary', permissions: [...INV_FLOOR, ...VIEW, 'scheduling.roster.view', ...TRADE, 'leave.request', ...READER] },
   { key: 'scheduler', label: 'Scheduler', permissions: [...OFFICER, ...ROSTER, ...READER, 'scheduling.config.manage', 'scheduling.qualification.override'] },
@@ -31,8 +34,9 @@ export const DEFAULT_ROLES: DepartmentTemplate['roles'] = [
   { key: 'training_officer', label: 'Training Officer', permissions: [...OFFICER, ...READER, ...LIBRARIAN, 'credentials.view', 'credentials.manage'] },
   { key: 'logistics_officer', label: 'Logistics / Inventory Officer', permissions: [...INV_MANAGER, ...OFFICER, ...READER] },
   { key: 'ems_officer', label: 'EMS Officer / QA Reviewer', permissions: [...OFFICER, ...READER] },
-  { key: 'medical_director', label: 'Medical Director', permissions: VIEW },
+  { key: 'medical_director', label: 'Medical Director', permissions: [...VIEW, ...CUSTODY_OFFICER] },
   { key: 'fleet_maintenance', label: 'Fleet / Maintenance', permissions: [...VIEW, ...INV_MANAGER] },
-  { key: 'auditor', label: 'Read-only Auditor', permissions: ['admin.members.view', 'admin.audit.view', 'files.view', 'documents.view', 'sog.report', 'forms.view_all', ...INV_READ] },
+  { key: 'auditor', label: 'Read-only Auditor', permissions: ['admin.members.view', 'admin.audit.view', 'files.view', 'documents.view', 'sog.report', 'forms.view_all', ...INV_READ, 'custody.audit'] },
+  { key: 'cs_officer', label: 'Controlled-Substance Officer', permissions: [...OFFICER, ...READER, ...CUSTODY_OFFICER] },
   { key: 'external', label: 'External / Mutual Aid', permissions: [] },
 ];

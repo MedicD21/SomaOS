@@ -26,6 +26,10 @@ const TIME_MESSAGES =
 const DOC_MESSAGES =
   /^(That document is archived|Upload the file first|That file is already used|Enter a |A folder cannot|Choose who|No active members|The due date|That version already|Only a (published|draft) version|That reading|You have already|A newer version|Type your full name|Draw your signature|Choose how to sign|This form must be signed|That form is not|You can only correct|That submission|A correction must|The form |Unknown (field|approval)|Answers must|Explain |Choose approve|unknown (form|submission|version|reading|document|folder)|not allowed: (documents|sog|forms)\.|not allowed: only the submitter|.+ is required$|.+ must (be|only|not)\b)/;
 
+/** Controlled-substance custody: the functions word their own errors for people. */
+const CUSTODY_MESSAGES =
+  /^(Not enough on hand|That (lot|location|box|seal number|medication|discrepancy|witness request|member cannot witness|request)|This (request is already|witness request)|A witness is required|The witness (has not|must)|only the named witness|Use at most|Enter (a|the|an|your)|Choose two|Count every lot|Each (lot|line)|The counter and|Only a (drug box|quantity)|Unknown (lot|medication|witnessed action|discrepancy|witness request|stock location|location kind|member)|Missing details|Archive its lots|explain (the|why|what)|A member location|Only a member|not allowed: custody\.)/i;
+
 export function friendlyDbError(e: unknown): string {
   if (e instanceof ActionError) return e.message;
   const msg = e instanceof Error ? e.message : String(e);
@@ -41,7 +45,7 @@ export function friendlyDbError(e: unknown): string {
   if (/member_pay_rates_member_no_overlap/.test(msg)) return 'That rate overlaps another rate for the same member. Choose a later start date.';
   if (/leave_requests_member_no_overlap/.test(msg)) return 'You already have leave requested for some of those dates.';
   // The leave functions raise plain-English messages meant for people; pass them through.
-  if (TIME_MESSAGES.test(msg) || INVENTORY_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
+  if (TIME_MESSAGES.test(msg) || INVENTORY_MESSAGES.test(msg) || CUSTODY_MESSAGES.test(msg) || /^Unknown leave bank/.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (LEAVE_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (DOC_MESSAGES.test(msg)) return msg.charAt(0).toUpperCase() + msg.slice(1);
   if (/config_versions_no_overlap/.test(msg)) return 'That effective date overlaps another approved version.';

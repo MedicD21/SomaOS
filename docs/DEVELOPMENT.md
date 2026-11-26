@@ -489,3 +489,88 @@ for documents, redlines between versions, full-text search, offline form sync.
 Existing departments: add the new permissions to their roles (Admin → Roles) and enable the modules.
 Tests: `packages/db/tests/{documents,readings,forms}.test.ts`, `apps/web/tests/db/documents-forms.test.ts`,
 `apps/worker/tests/db/reading-reminders.test.ts`, `apps/web/e2e/{documents,forms}.spec.ts`.
+
+## Controlled substances: custody (Phase 3b)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-3b-controlled-substances.md`. Module key `custody`, pages under `/custody`, admin at
+`/admin/custody`. Migrations `20261124000031` (catalog, locations, lots, seals), `…32` (ledger, witness requests, movements),
+`…33` (counts, discrepancies, expiry and recall views).
+
+> **TEST MODE UNTIL REVIEWED.** SomaOS records custody and surfaces problems. It does not decide what the law requires. Do not use it
+> as the system of record for controlled substances in a real department until counsel and the medical director have worked through
+> the Compliance Boundary checklist below. Every custody page says so.
+
+### What it is
+- **Catalog:** `cs_items` (medication, schedule label, unit), `cs_lots` (lot number, expiry, recall), `cs_locations` (vault, station,
+  unit, drug box, member; each belongs to an org unit). Separate from the 3a stock tables.
+- **Ledger:** `cs_ledger` is append-only (update, delete and truncate are rejected, even for the table owner). Every row is
+  attributed to the member who did it (stamped in SQL, never a parameter) and signed: `delta` is positive for receive and transfer in,
+  negative for administer, waste and transfer out. A movement can never take a lot below zero at a location (refused, not clamped);
+  expired or recalled lots cannot be received, moved or administered (waste, return and adjust stay possible). Mistakes are corrected only
+  by a **witnessed adjust**.
+- **Hash chain:** each location has its own chain. A new row's hash covers the previous hash and every field that matters; writers to a
+  location are serialized by locking its row. `app.verify_cs_chain(location)` (audit or manage) reports the first entry that does not
+  verify; the location page shows the result and a count opens a `chain` discrepancy if it fails. A hash chain shows tampering; it does
+  not stop someone with database-owner rights (anchoring the chain heads outside the database is future work).
+- **Balances** are views over the ledger (`cs_balances`), never a stored number. `cs_expiring` (90 days) and `cs_recalled` are views too.
+
+### Who can do what (four separate permissions; none implies another)
+| Permission | Can |
+|---|---|
+| `custody.record` | At their unit: receive, administer, transfer, return, request waste, seal, count |
+| `custody.witness` | Confirm witness requests at their unit (never their own) |
+| `custody.audit` | Read everything, department-wide; run the chain check; cannot write |
+| `custody.manage` | Catalog, lots, locations, recalls, adjustments, discrepancies (investigate, escalate, resolve) |
+
+The starter roles: **Department Admin holds none by default**; Member, Company Officer and Shift Commander get record and witness;
+the new **Controlled-Substance Officer** and the Medical Director get audit and manage; the Read-only Auditor gets audit.
+Existing departments must add these permissions to their roles and turn the module on (Admin → Settings).
+
+### Witnessing
+A witness is always a **different, authenticated member** confirming from their own session. The performer requests a witness
+(`request_cs_witness`); the named witness confirms or declines (`confirm_cs_witness`); the performer then completes the action and the
+stored request is **consumed once**, only for exactly the details the witness saw (quantities compare equal however they were typed).
+Requests expire after 30 minutes. Waste and adjust always need one; moving stock into or out of a drug box or a member needs one;
+seal breaks and counts need one. The UI is `/custody/witness`.
+
+### Counts and discrepancies
+The Drug Inventory count is **blind and binding**: the sheet lists the lots held with names only, the counter enters what they see, a
+witness confirms, and the expected quantity is read in SQL when the count is submitted. Every lot held must be counted. Any difference
+(quantity, seal number, or a failing chain) opens a **discrepancy**: it is never deleted or edited, only its status moves
+(open → investigating → escalated → resolved) by appending events. The counter and the witness cannot resolve their own count; a
+resolution may post one witnessed `adjust` linked to the discrepancy. "Escalate" records a free-text report reference; nothing is filed
+anywhere.
+
+### Defaults applied (the plan's recommended answers to the open questions)
+1. Witness confirms from their **own session**; same-device step-up waits for the auth design.
+2. Administer needs **no witness**, only a free-text incident/run number (incident numbers only, no patient identifiers).
+3. **Every waste** is witnessed by a different member with `custody.witness`.
+4. Counts are **blind and two-person** at shift change; frequency is the department's and is not enforced.
+5. **Any** difference opens a discrepancy; no automatic location hold; escalation is free text.
+6. Discrepancies are resolved by a Controlled-Substance Officer or Medical Director (`custody.manage`), never the counter or witness.
+7. `reference` holds an incident number only; no PHI.
+8. Ledger rows are **never purged**; counsel confirms the minimum retention.
+9. Per-unit scope for record, witness and manage; department-wide for audit.
+10. Release is gated on the checklist below; run in test mode until then.
+
+### Compliance Boundary: pre-release checklist for counsel and the medical director
+Nothing here is a legal conclusion. Each row is a question to confirm before a real department relies on the module.
+
+| Topic | Source (per research A3) | In this phase | Confirm |
+|---|---|---|---|
+| Records of receipts and deliveries, retention (reported as 2 years; 21 CFR 1304.04 / 1304.27) | Reported DEA | Ledger rows are kept indefinitely; no purge function exists | Retention period; required data elements; whether the fields satisfy 1304.27 |
+| Secure storage in a locked cabinet or vehicle (21 CFR 1301.80) | Reported DEA | Seal tracking is a record only, not a control | Whether seal events are expected as records |
+| Theft or significant loss reporting (one business day; Form 106) | Reported DEA | `escalated` status and a free-text report reference; no timers, nothing filed | What counts as significant; who decides; timers |
+| Waste of a partial dose: witness (research sources conflict) | Conflicting | Witness required for every waste (stricter, policy) | Whether required, and by whom, in our state |
+| Shift-change counts and frequency | Department or state policy | Binding blind count; frequency not enforced | Required frequency and who may count |
+| Discrepancy tolerance, officer approval, location hold | Department policy | Any difference opens a discrepancy; an officer resolves it | Zero tolerance for every schedule? |
+| Hash chain and separation of permissions | Engineering choice | Built | Whether it conflicts with record-keeping expectations |
+| Administer needs a witness or a standing/verbal order reference | Unclear, policy | Not required; free-text reference | Whether orders must be linked |
+| State-specific rules (licensing, seal logs, count frequency) | State law | Not configurable | Per-state list |
+
+Hooks left for later: ePCR linkage (the `reference` field), notice timers on `escalated`, DEA registrations and designated locations,
+Form 41 destruction and biennial inventory, ordering (Form 222 / CSOS), state rule configuration, external anchoring of chain heads,
+step-up PIN or biometric witnessing, barcode and smart-safe ingest.
+
+Tests: `packages/db/tests/{cs-catalog,cs-ledger,cs-counts}.test.ts` (including the tamper test and the concurrent last-units race),
+`packages/validators/tests/custody.test.ts`, `apps/web/tests/db/custody.test.ts`, `apps/web/e2e/custody.spec.ts`.
