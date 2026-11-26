@@ -80,3 +80,85 @@ describe('scheduling templates', () => {
     }
   });
 });
+
+describe('documents and forms starter pack', () => {
+  it('has the standard folders (HR restricted) and three valid forms, signed where the statement is set', async () => {
+    const { formFieldsSchema } = await import('@soma/validators');
+    for (const t of Object.values(TEMPLATES)) {
+      expect(t.documents.folders.map((f) => f.name)).toEqual(['Policies and SOGs', 'Forms Library', 'Training', 'HR']);
+      expect(t.documents.folders.find((f) => f.name === 'HR')?.viewPermission).toBe('admin.members.manage');
+      expect(t.documents.forms.map((f) => f.key)).toEqual(['incident_injury_report', 'vehicle_damage_report', 'equipment_issue_receipt']);
+      for (const form of t.documents.forms) {
+        expect(formFieldsSchema.safeParse(form.fields).success, form.key).toBe(true);
+        if (form.requiresSignature) expect((form.signatureStatement ?? '').length, form.key).toBeGreaterThanOrEqual(10);
+      }
+      expect(t.documents.forms.map((f) => f.approval)).toEqual(['officer', 'officer', 'none']);
+      expect(t.enabledModules).toEqual(expect.arrayContaining(['documents', 'forms']));
+    }
+  });
+
+  it('document and form permissions land only on the intended roles', () => {
+    const roles = Object.fromEntries(TEMPLATES['career-3-platoon'].roles.map((r) => [r.key, r.permissions]));
+    for (const key of ['member', 'volunteer', 'probationary']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.view', 'sog.acknowledge', 'forms.submit']));
+      for (const p of ['documents.manage', 'documents.publish', 'documents.backdate', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve', 'forms.view_all']) {
+        expect(roles[key], `${key}/${p}`).not.toContain(p);
+      }
+    }
+    for (const key of ['chief_officer', 'training_officer']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.manage', 'documents.publish', 'sog.assign', 'sog.report', 'forms.manage', 'forms.approve']));
+      expect(roles[key], key).not.toContain('documents.backdate');
+    }
+    for (const key of ['shift_commander', 'company_officer']) {
+      expect(roles[key], key).toEqual(expect.arrayContaining(['documents.view', 'sog.report', 'forms.approve', 'forms.submit', 'sog.acknowledge']));
+      expect(roles[key], key).not.toContain('documents.manage');
+    }
+    expect(roles.auditor).toEqual(expect.arrayContaining(['documents.view', 'sog.report', 'forms.view_all']));
+    expect(roles.dept_admin).toEqual(expect.arrayContaining(['documents.backdate', 'forms.manage', 'forms.view_all']));
+    expect(roles.external).toEqual([]);
+  });
+
+  it('custody permissions are separate: admin gets none by default, only the intended roles hold each one', () => {
+    const roles = Object.fromEntries(TEMPLATES['career-3-platoon'].roles.map((r) => [r.key, r.permissions]));
+    const custody = (key: string) => (roles[key] ?? []).filter((p) => p.startsWith('custody.')).sort();
+    expect(custody('dept_admin')).toEqual([]);
+    for (const key of ['member', 'company_officer', 'shift_commander']) expect(custody(key), key).toEqual(['custody.record', 'custody.witness']);
+    for (const key of ['cs_officer', 'medical_director']) expect(custody(key), key).toEqual(['custody.audit', 'custody.manage']);
+    expect(custody('auditor')).toEqual(['custody.audit']);
+    for (const key of ['volunteer', 'probationary', 'scheduler', 'payroll_hr', 'logistics_officer', 'external']) expect(custody(key), key).toEqual([]);
+    expect(TEMPLATES['career-3-platoon'].roles.find((r) => r.key === 'cs_officer')?.label).toBe('Controlled-Substance Officer');
+    expect(TEMPLATES['career-3-platoon'].enabledModules).toContain('custody');
+    expect(TEMPLATES.volunteer.enabledModules).not.toContain('custody');
+  });
+});
+
+describe('training templates', () => {
+  const roles = (key: keyof typeof TEMPLATES) => Object.fromEntries(TEMPLATES[key].roles.map((r) => [r.key, r.permissions]));
+
+  it('members browse and sign up; unit officers run sessions; trainers manage; auditors only read', () => {
+    const r = roles('career-3-platoon');
+    expect(r.member).toEqual(expect.arrayContaining(['training.course.view', 'training.session.view']));
+    expect(r.member).not.toContain('training.session.manage');
+    expect(r.member).not.toContain('training.compliance.view');
+    expect(r.company_officer).toEqual(expect.arrayContaining(['training.session.manage', 'training.attendance.mark', 'training.compliance.view']));
+    expect(r.company_officer).not.toContain('training.course.manage');
+    expect(r.company_officer).not.toContain('training.attendance.manage');
+    expect(r.training_officer).toEqual(expect.arrayContaining(['training.course.manage', 'training.attendance.manage', 'training.session.manage']));
+    expect(r.auditor).toEqual(expect.arrayContaining(['training.course.view', 'training.compliance.view']));
+    expect(r.auditor).not.toContain('training.session.manage');
+    expect(r.external).not.toContain('training.session.view');
+  });
+
+  it('both templates enable training and ship editable starter data with valid references', () => {
+    for (const t of Object.values(TEMPLATES)) {
+      expect(t.enabledModules).toContain('training');
+      const cats = new Set(t.training.categories.map((c) => c.key));
+      const creds = new Set(t.credentialTypes.map((c) => c.key));
+      for (const c of t.training.courses) {
+        expect(cats.has(c.categoryKey), c.key).toBe(true);
+        if (c.credentialTypeKey) expect(creds.has(c.credentialTypeKey), c.key).toBe(true);
+      }
+      for (const r of t.training.requirements) expect(cats.has(r.categoryKey), r.label).toBe(true);
+    }
+  });
+});

@@ -7,7 +7,7 @@ export const TERMINOLOGY_KEYS = [
 ] as const;
 export type TerminologyKey = (typeof TERMINOLOGY_KEYS)[number];
 
-export const MODULE_KEYS = ['admin', 'files', 'scheduling', 'leave', 'pay', 'inventory'] as const;
+export const MODULE_KEYS = ['admin', 'files', 'scheduling', 'leave', 'pay', 'documents', 'forms', 'inventory', 'custody', 'training'] as const;
 
 export const tenantSettingsSchema = z.object({
   timezone: timezoneSchema,

@@ -467,3 +467,219 @@ period, plus one sample mode per kind; no payroll import. 7. A second person app
 ### Not yet
 New rule kinds, drag-and-drop programming, importing rules from other systems, simulating rate changes or leave limits, multi-step
 approval chains, scheduled "approve on date", simulation history.
+
+## Documents, SOGs and forms (Phase 4a)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-4a-documents-forms.md`. Pages: `/documents`, `/sogs`, `/forms`, `/admin/form-definitions`.
+Modules `documents` and `forms` (Admin → Settings turns them on for departments created before this).
+
+### Documents
+- **Folders** nest; a folder can be restricted to department-wide holders of a permission (the starter **HR** folder uses
+  `admin.members.manage`). A restricted folder hides everything under it from everyone else, including the file itself
+  (`attachments` rows of entity `document_version` follow the version row's visibility, not just `files.view`).
+- A **document** has a kind (document / SOG / policy), an optional number (SOG 3.4) and many **versions**. Upload creates a
+  *draft*; `documents.publish` publishes it, which **supersedes** the previous version in one transaction (it stays
+  readable). A published version's file, label, dates and notes can never change, and versions are never deleted.
+  Backdating an effective date needs `documents.backdate` and a reason. Concurrent publishes are serialised per document.
+- Writes only go through `app.save_folder`, `create_document`, `add_document_version`, `publish_document_version`, `archive_document`.
+
+### Required reading (SOGs)
+- `sog.assign` assigns a *published* version to everyone, to units (and their sub-units) and/or roles, with a due date
+  (default 14 days), a statement and an optional typed-name requirement. Assignees are the active members matching the
+  audience at that time; the daily job (`reading-reminders`, `app.send_reading_reminders()`) adds later joiners.
+- A member acknowledges once (`app.acknowledge_reading`): the row records member, version in force, server time, the
+  exact statement and method (click or typed name) plus a SHA-256 `ack_hash`, and **cannot be changed or deleted**.
+  Acknowledging for someone else, an unassigned reading, a closed reading or after a newer *major* version is refused.
+- **Major vs minor** is the publisher's choice at publish time: a major version closes the old reading and opens a new one
+  for the same audience (old acknowledgements remain as history); a minor one keeps the open reading.
+- **Reminders** go through the notifications + jobs outbox at assignment, 7 days before due, on the due date, then every 7
+  days while overdue; each is logged per (reading, member, kind, day) so a rerun never double-sends. Acknowledged and
+  separated members get none; email honours notification preferences.
+- Officers with `sog.report` see who has not read it for their unit; members see only their own rows.
+
+### Forms
+- A **definition** is versioned JSON: fields use the custom-field types (`text, long_text, number, integer, boolean, date,
+  select, multi_select, email, phone`) plus an optional `show_if {field, equals}` on an *earlier* field. It also says
+  whether a signature is required (with the statement the signer agrees to) and whether an officer approves. Definitions are
+  never edited: **saving creates a new draft version**, publishing retires the old one.
+- **Submissions** are append-only and keep a copy of the definition they answered, so editing the form later never changes
+  history. The database validates answers (required, type, options, hidden fields must be empty) with the same wording as
+  custom fields (`app.validate_form_answers`).
+- **Signatures:** typed (the member retypes their own full name) or drawn (PNG stored base64 in the signature row, so
+  members need no file permissions). Each records signer, server time, method, the exact statement, IP and browser.
+- **Hashes** are computed in SQL in the function that inserts the row:
+  `submission_hash = sha256(tenant | definition_id | definition_version | member_id | submitted_at(UTC ISO) | answers jsonb text)`;
+  `signature_hash = sha256(submission_hash | signer | signed_at | method | statement | sha256(image))`.
+  `app.verify_submission(id)` recomputes both from stored data; the submission page shows *Intact* or a warning. This shows the
+  stored record was not altered after submission; it does not make an exported file tamper-evident (see below).
+- **Approval:** `approval = officer` needs a `forms.approve` holder whose grant covers the **submitter's station**, never the
+  submitter. Decisions (`approved`, `rejected`, `returned` with a note) are append-only rows; status is a view. A returned or
+  rejected submission is corrected by a **new submission that links to the original**, which stays visible, marked
+  "corrected by". The submitter can void before any decision; `forms.manage` can void any (reason required).
+- Starter content (editable, no legal review): folders *Policies and SOGs, Forms Library, Training, HR* and three forms
+  (Incident / Injury Report, Vehicle Damage Report — officer approval and signature; Equipment Issue Receipt — signature only).
+
+### Defaults applied for the plan's open questions
+Click acknowledgement (typed name per reading); publisher chooses major/minor; HR folder restricted by permission; 14-day
+due date with the reminder schedule above; officer sign-off on incident and vehicle reports only; on-screen signatures for
+internal forms with legal-grade sealing later; corrected submissions never replace the original; no NinthBrain import (upload
+current PDFs as version 1 and rebuild forms in the builder).
+
+### Not yet (needs a later compliance pass)
+PDF/A rendering of submissions, platform sealing (PAdES with a KMS key and an RFC 3161 timestamp), step-up authentication at
+signing, consumer e-sign consent screens and public signing links, per-form signature policy (witness, countersign order),
+retention schedules and legal holds, repeating sections/photo/GPS fields, multi-step approval chains, review-cycle reminders
+for documents, redlines between versions, full-text search, offline form sync.
+Existing departments: add the new permissions to their roles (Admin → Roles) and enable the modules.
+Tests: `packages/db/tests/{documents,readings,forms}.test.ts`, `apps/web/tests/db/documents-forms.test.ts`,
+`apps/worker/tests/db/reading-reminders.test.ts`, `apps/web/e2e/{documents,forms}.spec.ts`.
+
+## Controlled substances: custody (Phase 3b)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-3b-controlled-substances.md`. Module key `custody`, pages under `/custody`, admin at
+`/admin/custody`. Migrations `20261124000031` (catalog, locations, lots, seals), `…32` (ledger, witness requests, movements),
+`…33` (counts, discrepancies, expiry and recall views).
+
+> **TEST MODE UNTIL REVIEWED.** SomaOS records custody and surfaces problems. It does not decide what the law requires. Do not use it
+> as the system of record for controlled substances in a real department until counsel and the medical director have worked through
+> the Compliance Boundary checklist below. Every custody page says so.
+
+### What it is
+- **Catalog:** `cs_items` (medication, schedule label, unit), `cs_lots` (lot number, expiry, recall), `cs_locations` (vault, station,
+  unit, drug box, member; each belongs to an org unit). Separate from the 3a stock tables.
+- **Ledger:** `cs_ledger` is append-only (update, delete and truncate are rejected, even for the table owner). Every row is
+  attributed to the member who did it (stamped in SQL, never a parameter) and signed: `delta` is positive for receive and transfer in,
+  negative for administer, waste and transfer out. A movement can never take a lot below zero at a location (refused, not clamped);
+  expired or recalled lots cannot be received, moved or administered (waste, return and adjust stay possible). Mistakes are corrected only
+  by a **witnessed adjust**.
+- **Hash chain:** each location has its own chain. A new row's hash covers the previous hash and every field that matters; writers to a
+  location are serialized by locking its row. `app.verify_cs_chain(location)` (audit or manage) reports the first entry that does not
+  verify; the location page shows the result and a count opens a `chain` discrepancy if it fails. A hash chain shows tampering; it does
+  not stop someone with database-owner rights (anchoring the chain heads outside the database is future work).
+- **Balances** are views over the ledger (`cs_balances`), never a stored number. `cs_expiring` (90 days) and `cs_recalled` are views too.
+
+### Who can do what (four separate permissions; none implies another)
+| Permission | Can |
+|---|---|
+| `custody.record` | At their unit: receive, administer, transfer, return, request waste, seal, count |
+| `custody.witness` | Confirm witness requests at their unit (never their own) |
+| `custody.audit` | Read everything, department-wide; run the chain check; cannot write |
+| `custody.manage` | Catalog, lots, locations, recalls, adjustments, discrepancies (investigate, escalate, resolve) |
+
+The starter roles: **Department Admin holds none by default**; Member, Company Officer and Shift Commander get record and witness;
+the new **Controlled-Substance Officer** and the Medical Director get audit and manage; the Read-only Auditor gets audit.
+Existing departments must add these permissions to their roles and turn the module on (Admin → Settings).
+
+### Witnessing
+A witness is always a **different, authenticated member** confirming from their own session. The performer requests a witness
+(`request_cs_witness`); the named witness confirms or declines (`confirm_cs_witness`); the performer then completes the action and the
+stored request is **consumed once**, only for exactly the details the witness saw (quantities compare equal however they were typed).
+Requests expire after 30 minutes. Waste and adjust always need one; moving stock into or out of a drug box or a member needs one;
+seal breaks and counts need one. The UI is `/custody/witness`.
+
+### Counts and discrepancies
+The Drug Inventory count is **blind and binding**: the sheet lists the lots held with names only, the counter enters what they see, a
+witness confirms, and the expected quantity is read in SQL when the count is submitted. Every lot held must be counted. Any difference
+(quantity, seal number, or a failing chain) opens a **discrepancy**: it is never deleted or edited, only its status moves
+(open → investigating → escalated → resolved) by appending events. The counter and the witness cannot resolve their own count; a
+resolution may post one witnessed `adjust` linked to the discrepancy. "Escalate" records a free-text report reference; nothing is filed
+anywhere.
+
+### Defaults applied (the plan's recommended answers to the open questions)
+1. Witness confirms from their **own session**; same-device step-up waits for the auth design.
+2. Administer needs **no witness**, only a free-text incident/run number (incident numbers only, no patient identifiers).
+3. **Every waste** is witnessed by a different member with `custody.witness`.
+4. Counts are **blind and two-person** at shift change; frequency is the department's and is not enforced.
+5. **Any** difference opens a discrepancy; no automatic location hold; escalation is free text.
+6. Discrepancies are resolved by a Controlled-Substance Officer or Medical Director (`custody.manage`), never the counter or witness.
+7. `reference` holds an incident number only; no PHI.
+8. Ledger rows are **never purged**; counsel confirms the minimum retention.
+9. Per-unit scope for record, witness and manage; department-wide for audit.
+10. Release is gated on the checklist below; run in test mode until then.
+
+### Compliance Boundary: pre-release checklist for counsel and the medical director
+Nothing here is a legal conclusion. Each row is a question to confirm before a real department relies on the module.
+
+| Topic | Source (per research A3) | In this phase | Confirm |
+|---|---|---|---|
+| Records of receipts and deliveries, retention (reported as 2 years; 21 CFR 1304.04 / 1304.27) | Reported DEA | Ledger rows are kept indefinitely; no purge function exists | Retention period; required data elements; whether the fields satisfy 1304.27 |
+| Secure storage in a locked cabinet or vehicle (21 CFR 1301.80) | Reported DEA | Seal tracking is a record only, not a control | Whether seal events are expected as records |
+| Theft or significant loss reporting (one business day; Form 106) | Reported DEA | `escalated` status and a free-text report reference; no timers, nothing filed | What counts as significant; who decides; timers |
+| Waste of a partial dose: witness (research sources conflict) | Conflicting | Witness required for every waste (stricter, policy) | Whether required, and by whom, in our state |
+| Shift-change counts and frequency | Department or state policy | Binding blind count; frequency not enforced | Required frequency and who may count |
+| Discrepancy tolerance, officer approval, location hold | Department policy | Any difference opens a discrepancy; an officer resolves it | Zero tolerance for every schedule? |
+| Hash chain and separation of permissions | Engineering choice | Built | Whether it conflicts with record-keeping expectations |
+| Administer needs a witness or a standing/verbal order reference | Unclear, policy | Not required; free-text reference | Whether orders must be linked |
+| State-specific rules (licensing, seal logs, count frequency) | State law | Not configurable | Per-state list |
+
+Hooks left for later: ePCR linkage (the `reference` field), notice timers on `escalated`, DEA registrations and designated locations,
+Form 41 destruction and biennial inventory, ordering (Form 222 / CSOS), state rule configuration, external anchoring of chain heads,
+step-up PIN or biometric witnessing, barcode and smart-safe ingest.
+
+Tests: `packages/db/tests/{cs-catalog,cs-ledger,cs-counts}.test.ts` (including the tamper test and the concurrent last-units race),
+`packages/validators/tests/custody.test.ts`, `apps/web/tests/db/custody.test.ts`, `apps/web/e2e/custody.spec.ts`.
+
+
+## Training (Phase 4b)
+
+Plan: `docs/superpowers/plans/2026-11-25-phase-4b-training.md`. Pages: `/training`, `/training/[sessionId]`, `/training/compliance`, `/admin/training`.
+Replaces NinthBrain's training scheduling. Module key `training`; turn it on in Admin → Settings.
+
+### Data model
+- **Catalog (department-wide config, archive never delete):** `training_categories` (free-text `external_code`), `training_courses` (default hours, optional credential type granted on completion, `completion_rule.minHoursPct`), `training_requirements` (hours per category for a rank and/or role, a window, an effective date range; one open requirement per category+rank+role is enforced by an exclusion constraint). Written only by `app.save_training_*` / `archive_training_*` (department-wide `training.course.manage`).
+- **Sessions:** `training_sessions` (draft → scheduled → completed / cancelled), `training_audience_rules` (rank, role, shift, org unit, member), `training_enrollments` (`required`, `signed_up`, `added`; `enrolled`, `waitlisted`, `withdrawn`).
+- **Attendance** is **insert-only** (`training_attendance`; a trigger rejects update, delete and truncate even for the table owner). A correction is a new row with `supersedes_id`; the newest row per enrollment wins (`training_attendance_current`). **Hours are the view `training_hours`**, never a cached total, and a cancelled session's hours disappear from it.
+- **Awards** (`training_awards`, insert-only, unique per session and member) record each credential granted or renewed.
+
+### Who can do what (checked in SQL, not only in the web layer)
+| Action | Needs |
+|---|---|
+| Create, publish, reschedule, cancel a session; add attendees; complete | `training.session.manage` at the session's unit (department-wide for department-wide sessions) |
+| Mark attendance | `training.attendance.mark` or `.manage` at the unit, or being the session's instructor. **Nobody marks their own** unless they hold department-wide `training.attendance.manage` |
+| Correct attendance after the correction window (30 days after the session ends, `app.training_correction_days()`) | department-wide `training.attendance.manage` |
+| Award credentials on completion | `credentials.manage` (department-wide) as well |
+| Put enrolled members on the roster | department-wide `scheduling.roster.edit` as well |
+| Sign up / withdraw | any holder of `training.session.view` |
+| See compliance | `training.compliance.view`: yourself always, your unit's members, or everyone for a department-wide grant |
+
+Published sessions are visible to every `training.session.view` holder; **drafts only to managers at the unit and the instructor** (members hold a department-wide view grant, so "view" must not reveal drafts).
+
+### Attendance, completion and credentials
+- `attended` defaults to the full session length; `partial` needs hours and a note (5+ characters); `absent` and `excused` are 0 hours. Hours can never exceed the session length. Only `enrolled` members can be marked, after the session has started.
+- **Complete** marks the session done and, for each attendee with at least `minHoursPct` of the session's hours, **inserts a new `member_credentials` row** and an award. The web layer computes issue and expiry dates with the same `credentialExpiry` rule as the credentials pages and shows a preview first. A renewal never edits or shortens an existing credential. Completing again awards nothing twice. Attendance changed after an award is flagged on the session page and never revokes the credential automatically.
+
+### Waitlist
+`sign_up_training` locks the session row, enrols up to `capacity` and waitlists the rest in order (`queued_at` uses `clock_timestamp()` so same-moment sign-ups keep their order). Withdrawing promotes the first waitlisted member and notifies them. Required members always count toward capacity.
+
+### Compliance
+`windowFor` and `trainingCompliance` in `packages/schedule-engine/src/training.ts` are one pure rule used by both the compliance page and the reminder job. Windows: `calendar_year`, `rolling_months`, `fixed_cycle` (cycles end on month/day every N years, counted from the requirement's effective date; Feb 29 falls back to Feb 28). Status: `met`, `on_track`, `due_soon` (within 30 days of the window end), `overdue`. A window that just ended short stays `overdue` for a 30-day grace, then the new window takes over and earlier hours do not carry forward. A rolling window has no end, so a shortfall is overdue immediately. Hours outside the window, in another category, or from cancelled sessions do not count.
+The page lists only members the caller may see (`app.training_compliance_members`, `app.training_compliance_hours`) and exports the rows on screen as CSV (free text that starts with `=`, `+`, `-` or `@` is defused).
+
+### Reminders (worker `training-reminders`, daily)
+Per department with the module on: requirement reminders at `due_soon` and `overdue` (one per member, requirement, window and level, logged in `training_reminder_log` so a rerun sends nothing), a daily digest to each officer holding `training.compliance.view` listing overdue members in their scope, and a reminder to enrolled members of any session starting within 24 hours.
+
+### Roster link
+`app.schedule_training_assignments` inserts seatless `training` assignments for enrolled members and relies on the roster's own overlap rule: a member already working is **skipped with a reason**, never overridden (kelly days do not block, matching the roster). Cancelling the session, or a member withdrawing, cancels only those linked rows. Note: nothing in the database stops roster assignments in a closed pay period, so the roster link does not check payroll locks.
+
+### Starter data (examples to edit)
+Seven categories, six example courses (CPR renewal grants the CPR credential) and two **example requirements that start next January 1**, so an unedited example can never produce an overdue notice. No hour figure is a verified ISO, state or NCCP requirement; category codes are free text.
+
+### Defaults applied from the plan's open questions
+1. **NinthBrain import is not built.** It needs a sample export from the department (fields, category names, how credentials are recorded). Recommended: one-time CSV of completed records and current credentials through a preview-and-map screen; no live sync.
+2. Hour categories: neutral starter set with free-text external codes.
+3. Attendance: assigned instructor and officers with scope; nobody marks themselves except a department-wide training manager.
+4. Credential awarded when an officer clicks complete, after a preview; later edits flag but never revoke.
+5. Self sign-up for every published class (waitlist past capacity) except "by assignment only"; withdrawal until the start.
+6. Roster assignments are optional per session and never override.
+7. Correction window 30 days; department-wide managers can correct older rows.
+8. Reminder cadence as above (the plan's "30 days before the window ends" is the `due_soon` threshold).
+9. No proration for volunteers or part-time; use a smaller hour value on a volunteer role's requirement.
+
+### Existing departments
+Add the `training.*` permissions to your roles (Admin → Roles) and turn the module on. Starter roles already carry them: members get catalog and session view, unit officers run sessions and see their unit's compliance, Training Officer manages everything.
+
+### Not built
+NinthBrain importer, competency programs and task books, instructor qualification checks, quizzes and LMS content, external CE sync (CAPCE, NREMT), QR or offline attendance, recurring series, room and equipment booking, cost tracking, an edit form for an existing course or session (archive and recreate, or reschedule a session).
+
+### Tests
+`packages/db/tests/training-{catalog,sessions,roster}.test.ts`, `packages/schedule-engine/tests/training.test.ts`, `packages/validators/tests/training.test.ts`, `apps/worker/tests/db/training-reminders.test.ts`, `apps/web/tests/db/training.test.ts`, `apps/web/e2e/training.spec.ts`.

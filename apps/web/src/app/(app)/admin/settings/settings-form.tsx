@@ -54,7 +54,19 @@ export function SettingsForm({
               <input type="checkbox" name="modules" value="pay" defaultChecked={enabledModules.includes('pay')} /> Pay
             </label>
             <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="documents" defaultChecked={enabledModules.includes('documents')} /> Documents and SOGs
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="forms" defaultChecked={enabledModules.includes('forms')} /> Forms
+            </label>
+            <label className="flex items-center gap-2">
               <input type="checkbox" name="modules" value="inventory" defaultChecked={enabledModules.includes('inventory')} /> Assets and inventory
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="custody" defaultChecked={enabledModules.includes('custody')} /> Controlled-substance custody
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="modules" value="training" defaultChecked={enabledModules.includes('training')} /> Training
             </label>
           </fieldset>
           <Field id="reason" label="Reason for change (optional)">

@@ -2,6 +2,8 @@ import { STARTER_INVENTORY } from './inventory';
 import { DEFAULT_ROLES } from './roles';
 import { CAREER_LEAVE } from './leave';
 import { careerPay } from './pay';
+import { STARTER_DOCUMENTS } from './documents';
+import { STARTER_TRAINING } from './training';
 import { DEFAULT_CREDENTIAL_TYPES } from './credential-types';
 import type { DepartmentTemplate } from './types';
 
@@ -31,11 +33,13 @@ export const career3Platoon: DepartmentTemplate = {
     { key: 'c', label: 'C Shift', color: '#16a34a' },
   ],
   roles: DEFAULT_ROLES,
-  enabledModules: ['admin', 'files', 'scheduling', 'leave', 'pay', 'inventory'],
+  enabledModules: ['admin', 'files', 'scheduling', 'leave', 'pay', 'documents', 'forms', 'inventory', 'custody', 'training'],
   credentialTypes: DEFAULT_CREDENTIAL_TYPES,
   inventory: STARTER_INVENTORY,
   leave: CAREER_LEAVE,
   pay: careerPay(CAREER_LEAVE),
+  documents: STARTER_DOCUMENTS,
+  training: STARTER_TRAINING,
   schedulePattern: {
     key: 'default',
     payload: {

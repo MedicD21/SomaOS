@@ -5,6 +5,8 @@ import { sendEmail } from './jobs/send-email';
 import { inviteMember, type AuthAdmin } from './jobs/invite-member';
 import { credentialExpiryScan, ensureScanJob, nextScanTime } from './jobs/credential-expiry-scan';
 import { ensureAccrualJob, runAccruals } from './jobs/leave-accrual';
+import { ensureReadingReminderJob, sendReadingReminders } from './jobs/reading-reminders';
+import { ensureTrainingReminderJob, sendTrainingReminders } from './jobs/training-reminders';
 import { runOnce, type Handlers } from './runner';
 
 const env = (k: string): string => {
@@ -29,11 +31,15 @@ const handlers: Handlers = {
   'invite-member': (p) => inviteMember(p, { sql, auth, mailer, appUrl: process.env.APP_URL ?? 'http://localhost:3000' }),
   'credential-expiry-scan': async () => void (await credentialExpiryScan(sql, new Date())),
   'leave-accrual': async () => void (await runAccruals(sql, new Date())),
+  'reading-reminders': async () => void (await sendReadingReminders(sql, new Date())),
+  'training-reminders': async () => void (await sendTrainingReminders(sql, new Date())),
 };
 
 // Bootstrap the self-rescheduling daily scan (no-op when one is already pending).
 await ensureScanJob(sql, nextScanTime(new Date()));
 await ensureAccrualJob(sql, nextScanTime(new Date()));
+await ensureReadingReminderJob(sql, nextScanTime(new Date()));
+await ensureTrainingReminderJob(sql, nextScanTime(new Date()));
 
 if (process.argv.includes('--once')) {
   const n = await runOnce(sql, handlers);

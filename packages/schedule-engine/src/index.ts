@@ -8,3 +8,4 @@ export * from './pay';
 export * from './describe';
 export * from './diff';
 export * from './simulate';
+export * from './training';
