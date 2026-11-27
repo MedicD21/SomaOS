@@ -33,7 +33,7 @@ Other systems named on screen: CrewForce (crew sign-in/out, referenced by both t
 - Stations: M1–M10, EMS461, EMS462, Admin, Floater, Logistics, n/a. Station 11 exists in Front Line and in the time clock.
 
 ### 1.3 Ranks and member fields [O]
-- Rank list: Chief, Asst. Chief, Tour Commander, Captain, Lieutenant, ESOM, Training Officer, Paramedic, Intermediate, Basic, Orientee, LEADS, Dispatcher, EMS Maintenance. **[U]**: the seniority order in the draft is assumed.
+- Aladtec rank list: Chief, Asst. Chief, Tour Commander, Captain, Lieutenant, ESOM, Training Officer, Paramedic, Intermediate, Basic, Orientee, LEADS, Dispatcher, EMS Maintenance. The owner's rank order is in §8.1.
 - Work Group (e.g. "Full-time employees"), Pay Period ("Default"), Pay Profile ("EMS"), Time Clock User, Employee Type (Full Time / Part-Time).
 - **Pay Class: 300 (FTPM Medic), 320 (PTIN), 330 (FTPM Captains)**. These become the draft's pay groups.
 - Custom fields include promotional dates, an emergency contact block, and a 911 (dispatch) certification block (LEADS, CPR, APCO EMD/PST/FEC/LEC/CCS/CTO and instructor variants). The tenant is shared with the communications centre (Del-Comm forms).
@@ -131,37 +131,56 @@ Code names only. The owner notes this is **a partial list**: only codes that app
 | EMSHOLPD | Holiday paid (straight rate) |
 | EMS VTKN | Vacation taken |
 | EMSVTOVT | Vacation taken, overtime portion **[U]** |
-| EMSSTKNO | Sick taken **[U]** |
-| STKNOVT | Sick taken, overtime portion **[U]** |
-| EMSST | Sick (unclear how it differs from EMSSTKNO) **[U]** |
+| EMSST | Sick taken at straight time (owner) |
+| EMSSTKNO | Sick taken, built-in overtime portion? (owner unsure) **[U]** |
+| STKNOVT | Possibly FMLA-related; first appeared in an FMLA pay period (owner) **[U]** |
 | EMSPERS | Personal leave taken |
 | EMS CTKN | Comp time taken |
-| EMSVTOVT, STKNOVT | Suggest leave inside the overtime portion of a period is paid at the OT rate, i.e. leave counts toward the 80 h threshold **[U]** |
+| CPO 120P | Comp bank payout elected by the employee (owner) |
+
+The "OVT" codes exist because vacation and sick count toward the **built-in** overtime of the regular schedule (CBA 20.1, 22.3). Leave falling in the overtime hours of a week is paid at 1.5×. The owner is getting the full code list from payroll.
 
 ### 4.2 Leave ledger codes and accrual behaviour [O]
 - Balances tracked: Vacation, Sick Leave, Personal Leave, Military Leave, Comp. Time, FMLA. The stub prints beginning / earned / used / adjust / ending per bank each period.
 - Ledger period id format `YYNNNNN`, e.g. 2601024 = 2026, pay 24 (26 pays a year).
 - Vacation: accrual code **VEMS**, the same amount every pay period (tiered by service; the county table was not visible). Taken: EMS VTKN, EMSVTOVT.
-- Sick: accrual code **SEMS**. The amount **varies each period**, consistent with Ohio ORC 124.38 (4.6 h per 80 h in active pay status) **[U]**. Taken: EMSSTKNO, STKNOVT, EMSST.
-- Personal: **48 h granted once a year (early December, code PADJ)**, used in 24 h blocks (EMSPERS).
-- Comp: earned **EMSCE** (values seen: 0.5, 1, 12, 12.5, 17.5, 24), taken EMS CTKN, and **CPO 120P**, possibly a payout when the bank passes 120 h **[U]**.
+- Sick: accrual code **SEMS**. The amount **varies each period** because it is 0.0656 h per hour of regular work (CBA 20.1). Taken: EMSST, EMSSTKNO, STKNOVT.
+- Personal: **48 h granted once a year (code PADJ)**, used in 24 h blocks (EMSPERS). The CBA limits it to two uses a year.
+- Comp: earned **EMSCE** (values seen: 0.5, 1, 12, 12.5, 17.5, 24), taken EMS CTKN, and **CPO 120P** for an elected payout.
 - Paydays fall on Fridays (EFT), about 5 days after the period ends. The stub shows period 11/07–11/20.
 
 ---
 
 ## 5. What the SomaOS engines cannot express yet (do not hack around; plan these)
 
-1. **Leave paid at the OT rate when it falls above the threshold** (EMSVTOVT / STKNOVT). The pay engine always pays leave at multiplier 1 under the leave code (`pay.ts`, `pay.leave`). Needs: per leave type, an "OT-portion code" and multiplier.
-2. **Holiday default-to-comp with opt-in pay inside the same pay period.** There is no holiday calendar or per-holiday 8 h credit. `annual_front_load` (96 h on 1 Jan) does not match. Needs: a holiday calendar (hours per holiday, platoon rules), a default destination (comp bank), and a "paid" election bounded to the holiday's pay period. The captain variants ("Holiday not Worked Comped/Paid Captain") suggest different rules for the 330 group.
-3. **Annual grant on a date other than 1 January** (personal 48 h in early December). `annual_front_load` is hard-wired to Jan 1.
-4. **Accrual on hours in active pay status** (leave included) rather than hours worked. `per_hours_worked` uses `hoursWorked` only.
-5. **More than one shift pattern per department** (medic units 06:00 vs captains 07:30). The template carries a single `schedulePattern`.
-6. **Seat qualification "Paramedic or EMT"** and **split seats** (06–12/12–06, 06–18/18–06), plus the open-shift rule "full-time members may claim only half of a 24 h open seat". Check against Phase 1d before building.
-7. **Multiple-choice checklist items** with per-choice pass/fail and "No requires a comment". The checklist item kinds are pass_fail / number / text only, so the draft flattens them.
-8. **Cabinet/compartment PAR per unit and kits** (kit contents, kit checked out to unit or person, seal/expiry/lot per line). The inventory template's `items` has no location or PAR. Check the inventory module's stock-location model before adding.
-9. **Training sessions targeted at units and platoons** (SCE delivery to M3, M10 on a given shift day) and **audiences by position, platoon or group** for assignments.
-10. **Payroll verification**: member attests each time record per period, then supervisor and chief approve. Compare with payroll close (Phase 2).
-11. **Credential validity "issue + N years − 1 day"** and **"end of month"** expiries. `months` lands a day late or early.
+Updated 2026-11-27 with the CBA and the owner's answers (§8).
+
+**Pay and leave**
+1. **Leave that counts toward overtime only for the built-in hours** (CBA 20.1, 22.3: sick, funeral and vacation count toward the 8 h / 32 h of scheduled overtime, but not toward any extra overtime). The engine has one `countsAsWorked` flag and pays leave at multiplier 1 under its own code. The draft sets `countsAsWorked: true`, which over-counts in weeks with extra hours, and the OT-portion codes (EMSVTOVT) are not produced. Needs: per leave type, "counts toward scheduled-hours overtime only", plus an OT-portion export code.
+2. **Holiday calendar with a pay-or-comp election** (CBA 23): 8 h straight pay or 5.34 h comp per holiday (4 h / 2.67 h for Little Brown Jug Day and Christmas Eve), on the county's observed dates. Comp is the default, and paid holiday must be taken in the holiday's pay period. Nothing models a holiday calendar today; `annual_front_load` does not fit. The 2027 list is in the draft as `DELCO_HOLIDAYS_2027`.
+3. **Comp time paid at 1.5× when used, with a 180-day use-by** (CBA 21.2): it accrues 1:1, caps at 160 h, and an elected payout (CPO 120P) is paid at the overtime rate. The engine has a cap, but no expiry and no "multiplier on use".
+4. **Vacation earned as a lump at the first anniversary** ("two weeks" after one year, then pro rata per pay), and **carryover limited to three years with Director approval**. Accrual tiers cannot grant on an anniversary, and carryover is a balance cap, not an age limit.
+5. **Personal leave limited by number of uses** (two per calendar year, minimum 2 h each, CBA 20.5), not hours.
+6. **Flat hourly adders and annual supplements** (CBA 26.6–26.9): acting Lieutenant +$2.00/h after 6 consecutive hours, FTO +$2.00/h, SCE +$1.50/h on all hours (included in the overtime rate), instructor +$3.00/h, $360 a year each for Critical Care and FP-C, and frozen longevity ($100 per year of service as of 2019-01-01, paid bi-weekly). The pay engine has multipliers only.
+7. **Trades** (CBA 21.5): trade hours are not overtime hours, and the absent member is credited as if they worked. Eligibility needs 48 h of sick and/or personal accrued. Trades must be paid back within 90 days, both dates are recorded, the cap is 48 continuous hours, and nobody drives after 24 h continuous. Same-day "unforeseen" trades are limited to two per 6 months. A no-show is charged to the absent-for member's sick bank unpaid, and a pattern of no-shows bars trading for a year. Check each rule against Phase 1c.
+8. **Leave types visible by audience**: crew members should see only crew leave. `leave_types` has no visibility column. The proposed crew list is `DELCO_CREW_LEAVE_KEYS`.
+
+**Scheduling and staffing**
+9. **Minimum staffing as a department-wide count plus a per-unit rule**: at least **25 ALS providers on duty** (Paramedic and AEMT count as ALS) and **2 ALS per ambulance**. EMTs normally fill the third seat, and a unit may run 3 ALS. Any provider may pick up a Lieutenant open shift, and an EMT may take an open seat if the unit already has 2 ALS.
+10. **Temporary transfer (TT) suggestions**: when a unit is short of ALS and the department is at or above 25 ALS, suggest moving an ALS provider from a unit that has 3 ALS.
+11. **Mandate list** (owner's request): an easy-to-edit rotation list used when staffing drops below 25 ALS. It suggests the next member up for each hole and records who was mandated. CBA 21.4 says overtime rotates "in accordance with the applicable SOGs" (SOG 130 Mandatory Overtime).
+12. **Out-of-class eligibility lists**: Paramedics acting as Lieutenant (in-charge pay), and members on the yearly Captain promotional list acting as Captain.
+13. **More than one shift pattern per department** (medic units 06:00 vs captains 07:30). The template carries a single `schedulePattern`.
+14. **Split seats** (06–12/12–06, 06–18/18–06) and the open-shift rule "full-time members may claim only half of a 24 h open seat".
+
+**Inventory, training, other**
+15. **Multiple-choice checklist items** with per-choice pass/fail and "No requires a comment". Checklist item kinds are pass_fail / number / text, so the draft flattens them.
+16. **Cabinet PAR per unit, kits and supply-room reorder levels.** Operative IQ has cabinet types, kit types with seal/inspect flags, and supply-room reorder calculations (service level, order frequency, lead time, minimum supply days, demand weeks, seasonality). The inventory template has no PAR, cabinet or kit fields.
+17. **Asset preventive-maintenance schedules** by asset class (e.g. Zoll monitor PM due dates) and maintenance types (Cleaning, Documentation, Incident, Monitor Battery Replacement, Preventative Maintenance, Purchase, Repair, Upgrade). Check against Phase 3a.
+18. **CE tracking against Ohio and NREMT requirements, applied automatically from completed classes, with an audit view** (owner's request). Training requirements today are category hours in a window. They have no NCCP national/local/individual components and no per-certification renewal profile. The Ohio hour figures still need a primary source (research 04 C2).
+19. **Training sessions targeted at units and platoons** (SCE delivery) and **assignment audiences** by position, platoon or group.
+20. **Payroll verification**: the member attests each time record per period, then supervisor and chief approve.
+21. **Credential validity "issue + N years − 1 day"** and **"end of month"** expiries. `months` lands a day late or early.
 
 ---
 
@@ -171,7 +190,8 @@ Code names only. The owner notes this is **a partial list**: only codes that app
 |---|---|---|
 | Aladtec | Reports → Individual Member (Day/Week/Custom/Month range; default range is a pay period); Share My Schedule (calendar feed); Print | Report output and export formats not opened **[U]**. Aladtec admin reports and exports need the owner's admin. |
 | NinthBrain | Reports: My Reports (custom report builder, e.g. "VR 3/4"), Scheduled Reports, Predefined Reports (Calendar Attendance, Attendance Summary, Registration, Forms…); "Generate PDF of Attached Documents" on credentials; iCal subscription for the calendar; File Cabinet documents downloadable one by one | Report file formats not opened **[U]**; credentials → PDF bundle [O]; calendar → iCal [O] |
-| Front Line | Print Supply Request; Knowledge Center user guide; Back Office (not visible) | Bulk export (parts, PAR, cabinets) needs Back Office access **[U]** |
+| Operative IQ (Front Line + back office) | Report Library by category (Asset Management, Fleet, Narcotics, Parts and Suppliers, Purchasing, Service Desk, Supply Room Management, Unit Inventory and Inspections…). Includes "Book of Bar Codes - Supply Parts", "Inventory - Total Count by Location", "Asset List by Category", "Preventative Maintenance Planning", "Unit Type Asset Class Requirements". Parts & Assets grid: 2,109 records (732 supply parts, 1,362 fixed assets, 14 catalog assets, 1 fleet part) | Report export format not opened **[U]**. The owner will pull the master supply list. |
+| NEOGOV | Org chart with an Export button | Not used. Gives the position hierarchy. |
 | CentralSquare | Check stubs and leave ledgers on screen; W-2 / 1095-C pages | No bulk export for members. Payroll export layout must come from county payroll. |
 
 Importer stub: `docs/superpowers/plans/2026-11-27-current-systems-importers.md`.
@@ -180,13 +200,74 @@ Importer stub: `docs/superpowers/plans/2026-11-27-current-systems-importers.md`.
 
 ## 7. Questions for the owner
 
-1. Is 80 h / 14 days overtime a contract rule or the FLSA election? Which leave types count toward it (vacation, sick, comp, holiday)?
-2. What do EMSST, EMSSTKNO/STKNOVT, EMSVTOVT and CPO 120P mean exactly? Can county payroll send the full earnings code list?
-3. Vacation accrual table by years of service, max carryover, and the comp bank cap and payout rule (120 h?).
-4. Sick accrual: is it ORC 124.38 (4.6 / 80 h in pay status)? Cap? Conversion at retirement?
-5. Holiday list and hours per holiday for 24 h staff vs captains vs 40 h staff.
-6. Seat rules: can an EMT always fill the third seat? Minimum staffing per unit? Who may act as Lieutenant?
-7. Which Aladtec time-off types are still in use (e.g. Admin Leave - Covid, Tardy)? Which need documentation, and what lead time?
-8. CE requirements per level (Ohio and NREMT hours by category) and which NinthBrain categories map to NCCP national/local/individual.
-9. Can someone with admin rights export: Aladtec schedules and time-off history, NinthBrain course catalog and credential records, Front Line part master with PAR by cabinet and kit templates?
-10. Rank order and which titles (Tour Commander, ESOM, Training Officer, FTO, SCE) are ranks versus assignments.
+The first round (10 questions) is answered in §8. Still open:
+
+1. **The CBA ran November 1, 2023 – October 31, 2026.** Is a successor agreement signed or in negotiation? Every number in §8 must be re-checked against it.
+2. Which day and hour does the overtime week start (assumed Saturday 06:00, with the pay period)?
+3. Full payroll earnings and leave code list with definitions (EMSSTKNO, STKNOVT especially).
+4. Ohio EMT / AEMT / Paramedic renewal hours and any department CE requirement beyond Ohio and NREMT.
+5. Mandate list rules: order (seniority, hours, rotation?), who is exempt, does a mandate reset your position, and what SOG 130 says.
+6. Pay rules for Captains and above (group 330, outside the CBA) and for part-time (PTIN, group 320).
+7. Confirm the crew-visible leave list (`DELCO_CREW_LEAVE_KEYS`) and which admin-only types can be retired (Admin Leave - Covid, Tardy, DTU / MTU).
+
+---
+
+## 8. Owner answers and the CBA (added 2026-11-27)
+
+Sources: the owner's answers in chat; the 2023–2026 agreement between Delaware County and IAEP Local R7-11 (NAGE-SEIU), SERB case 2023-MED-07-0542; the county 2027 holiday schedule; Operative IQ back office and NEOGOV org chart (read-only). Appendix A of the CBA lists hourly wages by employee number and was **not** copied.
+
+### 8.1 Bargaining unit and ranks
+- The bargaining unit is full-time EMT, Advanced-EMT, Paramedic and Lieutenant (CBA 2.2). **Captains and above are not covered.**
+- Rank order (owner, NEOGOV): **Chief (Director of Emergency Services) → Assistant Chief → Captain → Lieutenant → Paramedic → AEMT → EMT.**
+- Positions within ranks (NEOGOV): Assistant Chief of Administration (over Captain of Clinical Quality & Compliance, Training Captain, Captain of Education & Development); Assistant Chief of Operations (over the 6 shift Captains and the EMS Logistics Coordinator); a Fiscal Administrative Coordinator; full-time and part-time (PTIN) Paramedic and EMT. FTO and SCE are assignments for members below Lieutenant.
+- Probation: 365 days for new hires, 180 days on promotion (CBA 7.1). Classification seniority (time in grade) decides station transfers (15.4). Lieutenant lists last 12 months (10.2).
+
+### 8.2 Work week, overtime, comp, trades
+- **24 on / 48 off** (21.1). Overtime is paid for **hours over 40 in a week**. That gives built-in overtime of 8 h in 48 h weeks and 32 h in 72 h weeks, so each cycle has **"long" pays (5 shifts) and "short" pays (4 shifts)** (owner).
+- Base pay for 24/48 staff is set on 2,080 straight hours plus 832 built-in overtime hours at 1.5× (the yearly figures in CBA 26.3 equal hourly × 3,328).
+- **Sick, funeral and vacation count as hours worked** for the built-in overtime only. **Personal, comp used and jury duty do not** (20.1–20.5, 21.2, 22.3).
+- **Comp** is elected in lieu of overtime pay (the member classifies it at clock-in). It accrues 1:1, is paid at 1.5× when used, caps at **160 h**, and must be used **within 180 days**. The Director may deny a use that disrupts operations (21.2).
+- **Call-back** not abutting the shift is paid at least **2 h** (21.3). Overtime rotates per SOG (21.4).
+- **Trades**: see §5 item 7 (21.5).
+- **Mileage** is reimbursed for mandated station-to-station travel, floaters and staffing moves, but not for trades or voluntary overtime (17.3).
+
+### 8.3 Leave (CBA 20, 22, 23)
+| Bank | Rule |
+|---|---|
+| Sick | **0.0656 h per hour of regular work**, no cap. Report 1 h before shift. At separation with 10+ years: ¼ paid out. At death: 1 h pay per 2 h (1:1 if line of duty). Transfers in from Ohio public employers within 10 years carry their balance. |
+| Funeral | Up to **two 24 h tours** charged to sick, for immediate family plus grandparents-in-law, aunts and uncles. |
+| Vacation (24/48) | **120 h/yr (1–7 yrs), 168 (8–14), 216 (15–24), 264 (25+)**, pro rata over 26 pays (4.62 / 6.46 / 8.31 / 10.15 h per pay). Two weeks after the first full year. None accrues on unpaid leave. Carryover for 3 years with Director approval. |
+| Personal | **Two uses a year** when scheduled, 2 h minimum each, no carryover, not charged to sick (payroll grants 48 h). |
+| Union | 150 h per contract for the president or designees. |
+| Court / jury | Court on a subpoena from on-duty work is paid. Jury duty is paid at regular rate (fee turned in) and is not hours worked. |
+| FMLA, military | Per law (19.2, 19.3). Unpaid disability leave up to 6 months after sick, comp and vacation are exhausted (19.1). |
+
+**Holidays (23.1–23.2)**: 11 eight-hour holidays and 2 four-hour holidays (Little Brown Jug Day, Christmas Eve). Each pays 8 h (or 4 h) straight time, or banks **5.34 h (2.67 h) of comp**. Comp is the default. The owner says Captains and crews follow the same list. The 2027 dates use the county's observed dates (e.g. Juneteenth observed Friday June 18; Christmas observed Friday December 24).
+
+### 8.4 Wages and supplements (CBA 26), structure only
+- Classification minimums are set for EMT, AEMT, Paramedic and Lieutenant for 2024–2026, with 4% across-the-board raises in the first full pay of 2025 and 2026. No raise follows an unacceptable evaluation (26.4).
+- Promotion pays +7.5% or the entry rate, whichever is greater (26.5).
+- Annual evaluations: **Core Competency** skills, **written protocol exam** (fail → remediation → FTO time → possible de-credentialing by the Medical Director) and a **Physical Abilities Test** (26.5). An EMT who becomes a Paramedic must pass the department list test and FTO before working as one.
+- Adders: acting Lieutenant +$2.00/h (6+ consecutive hours, pre-approved), FTO +$2.00/h (Paramedics, not Lieutenants), SCE +$1.50/h on all hours (Paramedics only; no FTO or instructor pay), instructor +$3.00/h, $360 a year each for Critical Care and FP-C certification, frozen longevity (26.6–26.9).
+- Required certifications (8.10): Ohio EMT, AEMT or Paramedic; BLS; a valid Ohio driver's license; insurability under the county policy.
+
+### 8.5 Staffing (owner)
+- **Minimum 25 ALS providers on duty.** AEMTs count as ALS. **2 ALS per ambulance at every station and shift.** EMTs are usually the third seat, and crews may run 3 ALS. The aim is 5–6 EMTs per unit day, but that is not a requirement.
+- An open seat that sign-ups don't fill is covered first by a **temporary transfer (TT)** of an ALS provider from a station with 3 ALS, if the department is at or above 25 ALS. Below 25, Captains use the **mandate list**.
+- Any provider may pick up a Lieutenant open shift. An EMT may take an open seat if the unit already has 2 ALS. ALS members riding in charge or out of class get the in-charge pay. Captain out-of-class is limited to members on the yearly Captain promotional list.
+
+### 8.6 Owner requests for SomaOS
+- An **easy-to-edit mandate list** that suggests the next member up for each hole (§5 item 11).
+- **Crew members see only the leave types available to them** (§5 item 8).
+- **CE tracking** against Ohio and NREMT, applied automatically from completed classes, with a visual audit trail for renewals (§5 item 18). The department does much more CE than required.
+- The captain/approval side was never visible to the owner. Design it fresh and keep it simple.
+
+### 8.7 Operative IQ back office (read-only)
+- **Unit types** (from questionnaire assignment): Ambulance - Diesel, Ambulance - Gas, Ambulance - Stocked Spare ONLY, Stocked Spare Equipment, Captain 461/462, Chief 460/461/462, EMS 461/462, F250, Kubota, Malibu, Minivan, MCI Trailer, Bike Team, Events, Utility.
+- **Questionnaires (19)**, with schedule: Daily PRIMARY Rear Check and Daily Vehicle Driver Inspection (Gas / Diesel) daily; Captain Daily Check daily; Stocked Spare Monday Truck Check daily (reserve status only); weekly Monday inspections for Chief 460/461/462, EMS 461/462, F250, Kubota (daily during the fair), Malibu, Van, Utility; on demand: Captain Monthly Drug Expiration Form, Drug Expiration Form, Truck Switch Form, Variance Report (all unit types).
+- **Asset classes** (fixed / catalog counts): Cardiac Equipment 118, Patient Movement 163/1, Fit Testing 4, Employee Gear 735/10, Training Equipment 68, Truck Medical Equipment 94/1, Station Equipment 53, MCI Trailer 3, Truck Equipment (not medical) 16, Logistics Equipment 2. Most are verified daily on Front Line.
+- **Maintenance types**: Cleaning, Documentation, Incident, Monitor Battery Replacement, Preventative Maintenance, Purchase, Repair, Upgrade. Zoll monitors carry PM due dates. A Service Desk department "Critical Equipment Failure Report (Monitor, Cot, Load system, Suction Unit, Autopulse, Batteries)" tracks tickets against units.
+- **Kit types (17)** with Track ID / Require Seal / Inspect flags: Airway Bag-Green, Avulsion Kit, Bed Bug Kit/Bag, Bike Drug Kit (seal + inspect), C-Spine Bag, Drug Drawer Medical Supply Kit, Drug Drawer- Medications (seal), Eye Care Kit, Fire Rehab Bag, First In Bag-RED, Handtevy Bag-BLUE, IV Roll, Narc Kit-A Safe, OPA Kit, RTF Bag, Zenix Monitor, Zoll AutoPulse NXT.
+- **Cabinet types (24)**: Monitor Inventory, First In Bag Red, Advanced Airway Bag, Green Airway Bag, Handtevy Bag (outside / main compartment), RTF Bags, Interior Cabinets, Fridge/Cooler, Outside Cabinets, Narcs, UCapIt, Drug Drawer - Sealed, Support Vehicle Equipment, Captain Stat Pack, Fair/Special Events Items, MCI Trailer Shelving 1–6 and Walls, Bed Bug Kit.
+- **Supply rooms**: main medical and cleaning supply, misc, employee gear, uniforms, PR events, training, truck equipment, P-Card purchases. Each station has a medical equipment supply cabinet and a station/cleaning/truck cabinet. Medical cabinets serve two medic groups, **(1, 2, 3, 6, 7, 11)** and **(4, 5, 8, 9, 10)**. UcapIt medication machines (Stations 1, 2, 7 and "Medication Cabinet @ Medic 2") raise their own supply requests.
+- **Part categories**: Class A Uniforms, Cleaning/Station Supplies, Fixed Assets, Fleet, Gear Assets, Medical Supplies, Medication, PR Supplies, Saline, Shop Supplies, Training Equipment, Uniforms, Uncategorized (plus one personal-name category). Part types: Supply Part, Fleet Part, Catalog Asset, Fixed Asset.

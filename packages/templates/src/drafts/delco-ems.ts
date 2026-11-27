@@ -27,8 +27,14 @@ const WARN_DAYS = [90, 60, 30, 7];
 export const DELCO_CREDENTIAL_TYPES: DepartmentTemplate['credentialTypes'] = [
   // NREMT cycles end 31 March every 2 years.
   { key: 'nremt_paramedic', label: 'NREMT - Paramedic', validity: { kind: 'fixed_cycle', month: 3, day: 31, years: 2 }, warnDays: WARN_DAYS },
-  // Ohio certificate observed as issue + 3 years - 1 day; `months: 36` lands one day late. UNVERIFIED.
+  // CBA 8.10 requires Ohio EMT, AEMT or Paramedic certification, BLS and an Ohio driver's license.
+  // Ohio certificate observed as issue + 3 years - 1 day; `months: 36` lands one day late. UNVERIFIED for EMT/AEMT.
   { key: 'ohio_paramedic', label: 'Ohio: Paramedic', validity: { kind: 'months', months: 36 }, warnDays: WARN_DAYS },
+  { key: 'ohio_aemt', label: 'Ohio: Advanced EMT', validity: { kind: 'months', months: 36 }, warnDays: WARN_DAYS },
+  { key: 'ohio_emt', label: 'Ohio: EMT', validity: { kind: 'months', months: 36 }, warnDays: WARN_DAYS },
+  // CBA 26.9(2): $360 a year for each of these. Validity UNVERIFIED.
+  { key: 'critical_care', label: 'Critical Care Certification', validity: { kind: 'none' }, warnDays: WARN_DAYS },
+  { key: 'fp_c', label: 'FP-C Certification', validity: { kind: 'none' }, warnDays: WARN_DAYS },
   // RQI cards observed expiring at the end of the month ~24 months out. UNVERIFIED (RQI itself is quarterly).
   { key: 'acls_rqi', label: 'ACLS RQI', validity: { kind: 'months', months: 24 }, warnDays: WARN_DAYS },
   { key: 'bls_rqi', label: 'BLS RQI', validity: { kind: 'months', months: 24 }, warnDays: WARN_DAYS },
@@ -51,13 +57,15 @@ export const DELCO_CREDENTIAL_TYPES: DepartmentTemplate['credentialTypes'] = [
 ];
 
 /**
- * Aladtec time-off types (39, in Aladtec's order) mapped to the banks the county payroll portal tracks:
+ * Aladtec time-off types (38, in Aladtec's order) mapped to the banks the county payroll portal tracks:
  * Vacation, Sick Leave, Personal Leave, Military Leave, Comp. Time (plus FMLA, tracked as a balance there).
- * `countsAsWorked` is false everywhere until the owner confirms which leave counts toward overtime; payroll has
- * separate "taken on overtime" codes (EMSVTOVT, STKNOVT), which suggests some leave does. UNVERIFIED.
+ * `countsAsWorked` follows the CBA (2023-2026): sick (20.1), funeral (20.2, charged to sick) and vacation (22.3)
+ * count toward overtime, but ONLY the built-in overtime of the regular schedule; personal (20.5), comp used (21.2)
+ * and jury duty (20.3) do not. The engine has no "scheduled overtime only" flag, so `true` over-counts when the
+ * member also works extra hours that week (research 06 §5).
  */
-const lt = (key: string, label: string, bankKey: string | null, requiresDocumentation = false): LeaveTemplate['types'][number] => ({
-  key, label, bankKey, leadTimeDays: 0, requiresDocumentation, countsAsWorked: false,
+const lt = (key: string, label: string, bankKey: string | null, requiresDocumentation = false, countsAsWorked = false): LeaveTemplate['types'][number] => ({
+  key, label, bankKey, leadTimeDays: 0, requiresDocumentation, countsAsWorked,
 });
 
 const accrualBase: Omit<AccrualPolicy, 'tiers'> = {
@@ -79,10 +87,10 @@ export const DELCO_LEAVE: LeaveTemplate = {
     { key: 'military', label: 'Military leave' },
   ],
   types: [
-    lt('sick', 'Sick Leave', 'sick'),
+    lt('sick', 'Sick Leave', 'sick', false, true),
     lt('sick_admin_use', 'Sick Leave - Administrative Use', 'sick'),
     lt('personal', 'Personal Leave', 'personal'),
-    lt('vacation', 'Vacation Leave', 'vacation'),
+    lt('vacation', 'Vacation Leave', 'vacation', false, true),
     lt('comp_time', 'Compensatory Leave', 'comp_time'),
     lt('dtu_mtu', 'DTU / MTU Leave', null),
     lt('training', 'Training Leave', null),
@@ -93,7 +101,8 @@ export const DELCO_LEAVE: LeaveTemplate = {
     lt('military', 'Military Leave', 'military', true),
     lt('jury_duty', 'Jury Duty', null, true),
     lt('court', 'Court Leave', null, true),
-    lt('funeral', 'Funeral Leave', null),
+    // CBA 20.2: up to two 24 h tours, deducted from sick leave.
+    lt('funeral', 'Funeral Leave', 'sick', false, true),
     lt('awol', 'Absence Without Leave (AWOL)', null),
     lt('dmat', 'DMAT', null),
     lt('holiday_paid', 'Holiday Paid', null),
@@ -101,8 +110,8 @@ export const DELCO_LEAVE: LeaveTemplate = {
     lt('admin_leave', 'Admin Leave', null),
     lt('honor_guard', 'Honor Guard', null),
     lt('fmla', 'FMLA', null, true),
-    lt('fmla_sick', 'FMLA - Sick', 'sick', true),
-    lt('fmla_vacation', 'FMLA - Vacation', 'vacation', true),
+    lt('fmla_sick', 'FMLA - Sick', 'sick', true, true),
+    lt('fmla_vacation', 'FMLA - Vacation', 'vacation', true, true),
     lt('fmla_comp', 'FMLA - Comp', 'comp_time', true),
     lt('fmla_lwop', 'FMLA - LWOP', null, true),
     lt('tardy', 'Tardy', null),
@@ -119,25 +128,79 @@ export const DELCO_LEAVE: LeaveTemplate = {
     lt('other', 'Other', null),
   ],
   policies: [
-    // Payroll posts a fixed vacation amount every pay period, tiered by service. The county's table is not visible
-    // to a member: earned by manual adjustment until the owner supplies it. UNVERIFIED.
-    { bankKey: 'vacation', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'manual' } }] } },
-    // Payroll's per-period sick credit varies with hours, consistent with Ohio's 4.6 h per 80 h in active pay status
-    // (ORC 124.38). The engine counts hours worked, not hours in pay status. UNVERIFIED.
-    { bankKey: 'sick', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'per_hours_worked', perHours: 80, earnHours: 4.6 } }] } },
-    // One 48 h grant per year (posted in early December, used in 24 h blocks). The engine grants on 1 January only.
-    { bankKey: 'personal', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'annual_front_load', hours: 48 } }] } },
-    // Comp is earned from overtime and holidays ("Holiday Comped"). Payroll code "CPO 120P" hints at a 120 h payout
-    // threshold; no cap is set until confirmed. UNVERIFIED.
-    { bankKey: 'comp_time', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'manual' } }] } },
+    // CBA 22.1 (24/48 employees): annual 120 h (1-7 yrs), 168 h (8-14), 216 h (15-24), 264 h (25+), pro rata over
+    // 26 bi-weekly pays (payroll posts 6.46 h a pay for the 168 h tier). Nothing accrues per pay in year one: "two
+    // weeks" are earned on completing the first year, which the engine cannot grant (research 06 §5). Carryover is
+    // "three years with the Director's approval", also not expressible; no cap is set.
+    {
+      bankKey: 'vacation',
+      payload: {
+        ...accrualBase,
+        tiers: [
+          { fromYears: 0, earn: { method: 'per_period', hours: 0 } },
+          { fromYears: 1, earn: { method: 'per_period', hours: 4.62 } },
+          { fromYears: 8, earn: { method: 'per_period', hours: 6.46 } },
+          { fromYears: 15, earn: { method: 'per_period', hours: 8.31 } },
+          { fromYears: 25, earn: { method: 'per_period', hours: 10.15 } },
+        ],
+      },
+    },
+    // CBA 20.1: 0.0656 h for each hour of regular work, accumulated without limit.
+    { bankKey: 'sick', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'per_hours_worked', perHours: 1, earnHours: 0.0656 } }] } },
+    // CBA 20.5: personal leave "up to two times each year", in increments of at least 2 h, no carryover into the next
+    // calendar year. Payroll grants 48 h (two 24 h tours); the two-uses limit is not expressible (research 06 §5).
+    {
+      bankKey: 'personal',
+      payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'annual_front_load', hours: 48 } }], carryover: { max: 0, resetOn: '01-01' } },
+    },
+    // CBA 21.2: comp accrues 1:1 in lieu of overtime pay, capped at 160 h, used within 180 days, and is paid at 1.5x
+    // when used. The 180-day use-by and the 1.5x-on-use are not expressible (research 06 §5).
+    { bankKey: 'comp_time', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'manual' } }], cap: 160 } },
+    // CBA 19.3: military leave follows federal and state law.
     { bankKey: 'military', payload: { ...accrualBase, tiers: [{ fromYears: 0, earn: { method: 'manual' } }] } },
   ],
 };
 
-/** County payroll export codes seen on a member's stub and leave ledger. Partial list. */
+/**
+ * Leave types a crew member (Lieutenant and below) may request themselves. The rest are entered by officers or
+ * admin (discipline, admin and captain-only codes). The proposal for the owner's review; the leave module has no
+ * per-type visibility yet (research 06 §5).
+ */
+export const DELCO_CREW_LEAVE_KEYS = [
+  'sick', 'personal', 'vacation', 'comp_time', 'funeral', 'jury_duty', 'court', 'military', 'unpaid_military',
+  'fmla', 'fmla_sick', 'fmla_vacation', 'fmla_comp', 'fmla_lwop', 'lwop', 'holiday_paid', 'holiday_comped',
+  'training', 'instructor', 'instructor_sce', 'peer_support', 'union', 'honor_guard', 'dmat', 'ohio_task_force_one',
+] as const;
+
+/**
+ * County holiday schedule 2027 (HR PDF) and CBA 23.1/23.2. Eight-hour holidays pay 8 h straight time or bank
+ * 5.34 h comp; the starred four-hour holidays pay 4 h or bank 2.67 h (comp is later paid at 1.5x). `observed` is the
+ * county date when the actual date falls on a weekend. Captains (outside the CBA) follow the same list, per the owner.
+ */
+export const DELCO_HOLIDAYS_2027: { name: string; actual: string; observed: string; hours: 8 | 4 }[] = [
+  { name: "New Year's Day", actual: '2027-01-01', observed: '2027-01-01', hours: 8 },
+  { name: 'Martin Luther King Day', actual: '2027-01-18', observed: '2027-01-18', hours: 8 },
+  { name: "President's Day", actual: '2027-02-15', observed: '2027-02-15', hours: 8 },
+  { name: 'Memorial Day', actual: '2027-05-31', observed: '2027-05-31', hours: 8 },
+  { name: 'Juneteenth', actual: '2027-06-19', observed: '2027-06-18', hours: 8 },
+  { name: 'Independence Day', actual: '2027-07-04', observed: '2027-07-05', hours: 8 },
+  { name: 'Labor Day', actual: '2027-09-06', observed: '2027-09-06', hours: 8 },
+  { name: 'Little Brown Jug Day', actual: '2027-09-23', observed: '2027-09-23', hours: 4 },
+  { name: 'Veterans Day', actual: '2027-11-11', observed: '2027-11-11', hours: 8 },
+  { name: 'Thanksgiving Day', actual: '2027-11-25', observed: '2027-11-25', hours: 8 },
+  { name: 'Day after Thanksgiving', actual: '2027-11-26', observed: '2027-11-26', hours: 8 },
+  { name: 'Christmas Eve', actual: '2027-12-24', observed: '2027-12-23', hours: 4 },
+  { name: 'Christmas Day', actual: '2027-12-25', observed: '2027-12-24', hours: 8 },
+];
+
+/**
+ * County payroll export codes seen on a member's stub and leave ledger, with the owner's reading of them. Partial
+ * list: the owner is getting the full code list from payroll. EMSST = sick taken at straight time; EMSVTOVT =
+ * vacation taken, overtime portion; EMSSTKNO / STKNOVT unclear (STKNOVT may be FMLA); CPO 120P = elected comp payout.
+ */
 const LEAVE_EXPORT: Record<string, string> = {
   vacation: 'EMS VTKN',
-  sick: 'EMSSTKNO',
+  sick: 'EMSST',
   personal: 'EMSPERS',
   comp_time: 'EMS CTKN',
   holiday_paid: 'EMSHOLPD',
@@ -147,11 +210,15 @@ export const DELCO_PAY: PayTemplate = {
   codes: [
     { key: 'reg', label: 'Regular (EMS SREG)', kind: 'regular', multiplier: 1, countsTowardFlsa: true, exportCode: 'EMS SREG' },
     { key: 'ot', label: 'Overtime (EMS SOT)', kind: 'overtime', multiplier: 1.5, countsTowardFlsa: true, exportCode: 'EMS SOT' },
+    // CBA 26.6: a Paramedic acting as Lieutenant for 6+ consecutive hours earns +$2.00/h. The engine has no flat
+    // hourly adders (also FTO +$2, SCE +$1.50, instructor +$3), so this code carries no premium yet.
+    { key: 'act', label: 'Out-of-class (Acting Lieutenant)', kind: 'premium', multiplier: 1, countsTowardFlsa: true, exportCode: null },
     ...DELCO_LEAVE.types.map((t) => ({
       key: t.key, label: t.label, kind: 'leave' as const, multiplier: 1, countsTowardFlsa: false, exportCode: LEAVE_EXPORT[t.key] ?? null,
     })),
   ],
-  // Aladtec work groups / pay classes: 300 FTPM Medic, 320 PTIN, 330 FTPM Captains. Rules exist only for 300.
+  // Aladtec work groups / pay classes: 300 FTPM Medic, 320 PTIN, 330 FTPM Captains. Rules exist only for 300, the
+  // bargaining unit (full-time EMT, AEMT, Paramedic, Lieutenant). Captains and above are outside the CBA.
   groups: [
     { key: 'pc300_ftpm_medic', label: '300 (FTPM Medic)' },
     { key: 'pc320_ptin', label: '320 (PTIN)' },
@@ -162,22 +229,26 @@ export const DELCO_PAY: PayTemplate = {
       groupKey: 'pc300_ftpm_medic',
       payload: {
         payPeriod: { kind: 'fixed_days', days: 14, anchor: PAY_PERIOD_ANCHOR },
-        // A stub shows exactly 80 h EMS SREG and the remainder as EMS SOT at 1.5x: an 80 h / 14-day threshold.
-        // Whether that is contract or FLSA, and which leave counts toward it, is UNVERIFIED.
-        workPeriod: { days: 14, anchor: PAY_PERIOD_ANCHOR, threshold: 80, multiplier: 1.5, code: 'ot' },
+        // Overtime is paid for hours over 40 in a week (owner). On 24/48 that is built-in overtime of 8 h in 48 h
+        // weeks and 32 h in 72 h weeks (CBA 20.1, 22.3), giving "long" (5-shift) and "short" (4-shift) pays.
+        // Weeks are assumed to start with the pay period, Saturday. UNVERIFIED week boundary.
+        workPeriod: { days: 7, anchor: PAY_PERIOD_ANCHOR, threshold: 40, multiplier: 1.5, code: 'ot' },
         overtimeCombination: 'highest',
+        // Extra and held-over hours are straight time until the weekly threshold makes them overtime.
         assignments: {
           regular: { code: 'reg', multiplier: 1 },
-          overtime: { code: 'ot', multiplier: 1.5 },
-          trade: { code: 'reg', multiplier: 1 },
-          holdover: { code: 'ot', multiplier: 1.5 },
-          callback: { code: 'ot', multiplier: 1.5 },
-          acting: { code: 'reg', multiplier: 1 },
+          overtime: { code: 'reg', multiplier: 1 },
+          // CBA 21.5: hours worked on a trade are not hours worked for overtime.
+          trade: { code: 'reg', multiplier: 1, countsTowardFlsa: false },
+          holdover: { code: 'reg', multiplier: 1 },
+          // CBA 21.3: a call-back not abutting the shift is paid at least 2 h.
+          callback: { code: 'reg', multiplier: 1, minimumHours: 2 },
+          acting: { code: 'act', multiplier: 1 },
           training: { code: 'reg', multiplier: 1 },
           detail: { code: 'reg', multiplier: 1 },
         },
-        // Members can bank comp ("Compensatory Time Earned Payout Request" form exists). UNVERIFIED multiplier.
-        compTime: { mode: 'member_choice', multiplier: 1.5, bankKey: 'comp_time' },
+        // CBA 21.2: members elect comp in lieu of overtime pay; it accrues 1:1 (paid at 1.5x when used).
+        compTime: { mode: 'member_choice', multiplier: 1, bankKey: 'comp_time' },
       },
     },
   ],
@@ -191,16 +262,29 @@ const txt = (key: string, label: string, required = true): ChecklistItemTemplate
 const item = (sku: string | null, name: string, unit = 'each'): InventoryTemplate['items'][number] => ({ sku, name, category: 'medical', unit });
 
 export const DELCO_INVENTORY: InventoryTemplate = {
+  // Operative IQ unit types (vehicles) and asset classes (equipment), from the back office.
   assetTypes: [
     { key: 'ambulance_diesel', label: 'Ambulance - Diesel', category: 'apparatus' },
     { key: 'ambulance_gas', label: 'Ambulance - Gas', category: 'apparatus' },
-    { key: 'staff_vehicle', label: 'Staff vehicle (Malibu)', category: 'apparatus' },
-    { key: 'cardiac_monitor', label: 'Cardiac monitor (Zoll Zenix)', category: 'medical_device' },
-    { key: 'cpr_device', label: 'Mechanical CPR (AutoPulse NXT)', category: 'medical_device' },
-    { key: 'video_laryngoscope', label: 'Video laryngoscope (Glidescope GO)', category: 'medical_device' },
-    { key: 'io_driver', label: 'IO driver', category: 'medical_device' },
-    { key: 'cot', label: 'Cot', category: 'medical_device' },
-    { key: 'equipment', label: 'Equipment', category: 'equipment' },
+    { key: 'ambulance_stocked_spare', label: 'Ambulance - Stocked Spare', category: 'apparatus' },
+    { key: 'captain_vehicle', label: 'Captain vehicle (Captain 461/462)', category: 'apparatus' },
+    { key: 'chief_vehicle', label: 'Chief vehicle (Chief 460/461/462)', category: 'apparatus' },
+    { key: 'ems_support_vehicle', label: 'EMS support vehicle (EMS 461/462)', category: 'apparatus' },
+    { key: 'f250', label: 'F250', category: 'apparatus' },
+    { key: 'kubota', label: 'Kubota (UTV)', category: 'apparatus' },
+    { key: 'malibu', label: 'Malibu (staff car)', category: 'apparatus' },
+    { key: 'minivan', label: 'Minivan', category: 'apparatus' },
+    { key: 'mci_trailer', label: 'MCI Trailer', category: 'apparatus' },
+    { key: 'utility', label: 'Utility', category: 'apparatus' },
+    { key: 'cardiac_equipment', label: 'Cardiac Equipment (Zoll Zenix, AutoPulse)', category: 'medical_device' },
+    { key: 'patient_movement', label: 'Patient Movement (devices for packaging and moving patients)', category: 'medical_device' },
+    { key: 'truck_medical_equipment', label: 'Truck Medical Equipment', category: 'medical_device' },
+    { key: 'truck_equipment', label: 'Truck Equipment, not medical (Cradlepoint, cooler, radio)', category: 'equipment' },
+    { key: 'station_equipment', label: 'Station Equipment', category: 'equipment' },
+    { key: 'employee_gear', label: 'Employee Gear (rescue gear, vests, RTF helmets)', category: 'ppe' },
+    { key: 'fit_testing', label: 'Fit Testing Equipment', category: 'equipment' },
+    { key: 'training_equipment', label: 'Training Equipment', category: 'equipment' },
+    { key: 'logistics_equipment', label: 'Logistics Equipment', category: 'equipment' },
   ],
   assetFields: [
     { key: 'unit_letter', label: 'Fleet letter (e.g. Letter, F, Q)', type: 'text', required: false },
@@ -361,7 +445,22 @@ export const DELCO_INVENTORY: InventoryTemplate = {
     item('E34', 'Zenix CPR pads, adult'),
     item('F51', 'Zenix CPR pads, pediatric'),
   ],
-  stockLocations: [{ name: 'Logistics', kind: 'storeroom' }],
+  // Operative IQ supply rooms. Station medical cabinets serve two groups of medics: (1, 2, 3, 6, 7, 11) and
+  // (4, 5, 8, 9, 10). Medication cabinets (UcapIt machines) belong to the custody module, not here.
+  stockLocations: [
+    'Medical Supplies - Main Supply',
+    'Cleaning/Station Supplies - Main Supply',
+    'DCEMS Misc. Supplies',
+    'Employee Gear',
+    'Class A and B Uniforms',
+    'PR Event Supplies',
+    'Training Supplies',
+    'Truck Equipment',
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].flatMap((n) => [
+      `Station ${n} - Medical Equipment Supply Cabinet (${[4, 5, 8, 9, 10].includes(n) ? '4, 5, 8, 9, 10' : '1, 2, 3, 6, 7, 11'})`,
+      `Station ${n} - Station/Cleaning/Truck Supplies`,
+    ]),
+  ].map((name) => ({ name, kind: 'storeroom' as const })),
 };
 
 /** NinthBrain course catalog categories (these mirror NREMT NCCP topic areas; codes not confirmed). */
@@ -382,7 +481,8 @@ export const DELCO_TRAINING: TrainingTemplate = {
   courses: [
     { key: 'core_competency', label: 'Core Competency Process (annual)', categoryKey: 'operations', defaultHours: 0, credentialTypeKey: null, description: 'Yearly core comps; 2026 topics: adult poisoning, difficult airway, geriatric injury, operations/HIPAA, pediatric seizures.' },
     { key: 'sim_lab', label: 'Quarterly Sim Lab', categoryKey: 'medical', defaultHours: 0, credentialTypeKey: null, description: 'Quarterly simulation lab (e.g. neonate resuscitation, post-partum hemorrhage).' },
-    { key: 'protocol_exam', label: 'Quarterly Protocol Exam', categoryKey: 'medical', defaultHours: 0, credentialTypeKey: null, description: 'ALS protocol exam, assigned quarterly with a due date.' },
+    { key: 'protocol_exam', label: 'Protocol Exam', categoryKey: 'medical', defaultHours: 0, credentialTypeKey: null, description: 'Written protocol exam: annual under CBA 26.5 (remediation, then FTO time, then possible de-credentialing), assigned quarterly in practice.' },
+    { key: 'physical_abilities_test', label: 'Physical Abilities Test (PAT)', categoryKey: 'operations', defaultHours: 0, credentialTypeKey: null, description: 'Annual third-party PAT (CBA 26.5); failure leads to remediation and a retest within 6 months.' },
     { key: 'sce_session', label: 'Shift Clinical Educator (SCE) session', categoryKey: 'medical', defaultHours: 0, credentialTypeKey: null, description: 'On-duty topic delivered by an SCE to listed units across several shift days (e.g. Environmental Emergencies - M3, M10).' },
     { key: 'medical_director_zoom', label: 'Medical Director Zoom', categoryKey: 'medical', defaultHours: 1, credentialTypeKey: null, description: 'Monthly medical director session.' },
     { key: 'handtevy', label: 'Handtevy', categoryKey: 'pediatric', defaultHours: 0, credentialTypeKey: 'handtevy', description: 'Renews the Handtevy credential.' },
@@ -433,17 +533,17 @@ export const delcoEmsDraft: DepartmentTemplate = {
     { key: 'station', label: 'Station', sort: 2 },
     { key: 'unit', label: 'Unit', sort: 3 },
   ],
-  // Aladtec "Rank" list, ordered by assumed seniority. Training Officer, FTO, SCE, ESOM, Tour Commander, LEADS,
-  // Dispatcher and EMS Maintenance are treated as roles/assignments, not ranks. UNVERIFIED order.
+  // Rank order from the owner and NEOGOV. Admin titles are positions held at a rank: Assistant Chief of
+  // Administration / of Operations; Captain of Clinical Quality & Compliance, Training Captain, Captain of
+  // Education & Development (admin captains) vs the six shift Captains. FTO and SCE are assignments below Lieutenant.
   ranks: [
-    { key: 'chief', label: 'Chief (Director of EMS)', sort: 1 },
+    { key: 'chief', label: 'Chief (Director of Emergency Services)', sort: 1 },
     { key: 'asst_chief', label: 'Assistant Chief', sort: 2 },
     { key: 'captain', label: 'Captain', sort: 3 },
     { key: 'lieutenant', label: 'Lieutenant', sort: 4 },
     { key: 'paramedic', label: 'Paramedic', sort: 5 },
-    { key: 'intermediate', label: 'Intermediate (AEMT)', sort: 6 },
-    { key: 'basic', label: 'Basic (EMT)', sort: 7 },
-    { key: 'orientee', label: 'Orientee', sort: 8 },
+    { key: 'aemt', label: 'AEMT', sort: 6 },
+    { key: 'emt', label: 'EMT', sort: 7 },
   ],
   // Aladtec "Duty Day": Unit 1, Unit 2, Unit 3 (also "40 hrs" and "Part-Time", which are not platoons).
   shifts: [
