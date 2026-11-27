@@ -93,14 +93,14 @@ Versioned, effective-dated and approved like shift patterns, so a change in the 
 5. Exempt, working, on-leave and unqualified members are never suggested (Task 2).
 
 ## Tasks
-- [ ] 1. DB: migration + `packages/db/tests/mandate-lists.test.ts` (written first): isolation for the three tables, permission
+- [x] 1. DB: migration + `packages/db/tests/mandate-lists.test.ts` (written first): isolation for the three tables, permission
   checks, reorder validation, skip/exempt/remove, record → assignment + rotation + event, double-booking refused.
-- [ ] 2. Engine: `staffing.ts` + `tests/staffing.test.ts` (written first): counting, unit violations, credential validity at
+- [x] 2. Engine: `staffing.ts` + `tests/staffing.test.ts` (written first): counting, unit violations, credential validity at
   shift end, TT rules, mandate candidate statuses.
-- [ ] 3. Permission, starter roles, validators, template draft rules, web server (`server/scheduling/staffing.ts`,
+- [x] 3. Permission, starter roles, validators, template draft rules, web server (`server/scheduling/staffing.ts`,
   `server/scheduling/mandate.ts`), roster banner and flags, `/admin/scheduling/staffing`, `/mandate`, nav,
   `e2e/mandate.spec.ts`.
-- [ ] 4. Docs section in `DEVELOPMENT.md`, full verification, PR (not merged).
+- [x] 4. Docs section in `DEVELOPMENT.md`, full verification, PR (not merged).
 
 ## Defaults applied until the owner answers (change any of them in review)
 - A mandate moves the member to the **bottom** of the list. A skip keeps their position.

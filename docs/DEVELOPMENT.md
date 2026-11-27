@@ -358,6 +358,36 @@ Plan: `docs/superpowers/plans/2026-11-25-phase-1d2-open-shifts.md`. Page: `/open
 - **Not yet:** call-back lists and mandatory hold-over ordering, special pay rules for open shifts, leave limits (1d-3).
 - **Existing departments:** add `scheduling.openshift.claim` to their member roles (Admin → Roles).
 
+## Minimum staffing and the mandate list (Phase 1d-4)
+
+Plan: `docs/superpowers/plans/2026-11-27-phase-1d4-staffing-mandate.md` (owner questions listed there). Pages: `/roster`
+(staffing banner), `/mandate`, **Admin → Scheduling → Staffing rules**.
+
+- **Staffing rules are configuration** (`config_versions`, kind `staffing.rules`, key `default`), versioned and approved
+  like shift patterns. A *group* is a set of credential type keys (e.g. ALS = `paramedic` or `aemt`); the rules set a
+  department minimum per group and a per-unit minimum for every org unit of a given type. The career template seeds a
+  **draft** (25 ALS, 2 ALS per `unit`); nothing is checked until it is approved (`admin.config.manage`).
+- **Evaluation** (`evaluateStaffing` in `@soma/schedule-engine`, loaded by `server/scheduling/staffing.ts`): seated,
+  scheduled shifts starting on the roster day count; a member counts for a group when a credential of the group is
+  valid through the end of that shift. The roster shows department counts, flags each unit below its minimum and,
+  when the department minimum is met, suggests **temporary transfers** (`suggestTransfers`: never takes a donor below
+  the minimum, prefers non-officer seats). TTs are suggestions; the officer cancels and fills.
+- **Mandate lists** (`mandate_lists`, `mandate_list_entries`, append-only `mandate_events`): written only through
+  `app.create_mandate_list`, `mandate_add` (bottom), `mandate_remove`, `mandate_reorder` (exactly the active members),
+  `mandate_set_exempt` (null reason clears), `mandate_skip` (one date, position kept) and `mandate_record`. All need
+  department-wide `scheduling.mandate.manage`; every change except adding needs a reason and is logged and audited.
+  `mandate_record` also needs roster edit at the seat's unit, creates an `overtime` assignment (the roster's overlap
+  constraints refuse a double-booking), moves the member to the bottom and notifies them. Anyone with roster view
+  can read the lists and history.
+- **Next up** (`mandateCandidates`): the list in order, passing over members who are exempt, already scheduled that
+  day, on pending or approved leave, skipped for the date, separated or not in the group. The page suggests one member
+  per hole below the department minimum.
+- **Reordering** is drag and drop with Move up / Move down buttons for keyboard and screen-reader users.
+- **Not yet:** applying a TT in one step, minute-by-minute coverage for split seats, out-of-class lists, mandate
+  ordering rules from SOG 130 (see the plan's owner questions).
+- **Existing departments:** add `scheduling.mandate.manage` to the officer roles that mandate (Admin → Roles) and create
+  staffing rules under Admin → Scheduling → Staffing rules.
+
 ## Assets, checklists and inventory (Phase 3a)
 
 Plan: `docs/superpowers/plans/2026-11-25-phase-3a-assets-inventory.md`. Module key `inventory` (Admin → Settings). Pages:
