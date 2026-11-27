@@ -6,10 +6,10 @@ import { localDateOf } from '@soma/schedule-engine';
 import { RuleWorkbench } from '@/components/rule-builder/RuleWorkbench';
 import type { Doc } from '@/components/rule-builder/path';
 import { approvePolicy, savePolicy, simulateAccrualPolicy } from './actions';
-import { AddBankForm, AddLeaveTypeForm, AddLimitForm, AdjustForm, ArchiveBankForm, ArchiveLimitForm, ArchiveTypeForm } from './forms';
+import { AddBankForm, AddLeaveTypeForm, AddLimitForm, AdjustForm, ArchiveBankForm, ArchiveLimitForm, ArchiveTypeForm, TypeAudienceForm } from './forms';
 
 type Bank = { id: string; key: string; label: string; archived: boolean };
-type Type = { id: string; label: string; bank_label: string | null; lead_time_days: number; requires_documentation: boolean; archived: boolean };
+type Type = { id: string; label: string; bank_label: string | null; lead_time_days: number; requires_documentation: boolean; audience: 'member' | 'officer'; archived: boolean };
 type Limit = { id: string; label: string; max: number; unit: string | null; shift: string | null; type: string | null; from: string; archived: boolean };
 type Entry = { id: string; when: string; member: string; bank: string; kind: string; hours: number; note: string | null };
 
@@ -32,7 +32,7 @@ export default async function LeaveAdminPage() {
   const data = await withCtxDb(ctx, async (tx) => {
     const banks = await tx<Bank[]>`select id, key, label, archived_at is not null as archived from leave_banks order by archived_at nulls first, label`;
     const types = await tx<Type[]>`
-      select t.id, t.label, b.label as bank_label, t.lead_time_days, t.requires_documentation, t.archived_at is not null as archived
+      select t.id, t.label, b.label as bank_label, t.lead_time_days, t.requires_documentation, t.audience, t.archived_at is not null as archived
       from leave_types t left join leave_banks b on b.id = t.bank_id order by t.archived_at nulls first, t.sort, t.label`;
     const members = await tx<{ id: string; label: string }[]>`
       select id, last_name || ', ' || first_name as label from members where status <> 'separated' order by last_name, first_name`;
@@ -78,9 +78,13 @@ export default async function LeaveAdminPage() {
           {data.types.map((t) => (
             <li key={t.id}>
               <span className="font-medium">{t.label}</span>
-              <span className="text-sm text-muted"> · {t.bank_label ? `draws from ${t.bank_label}` : 'no balance'}{t.lead_time_days > 0 ? ` · ${t.lead_time_days} days notice` : ''}{t.requires_documentation ? ' · documentation required' : ''}</span>
+              <span className="text-sm text-muted"> · {t.bank_label ? `draws from ${t.bank_label}` : 'no balance'}{t.lead_time_days > 0 ? ` · ${t.lead_time_days} days notice` : ''}{t.requires_documentation ? ' · documentation required' : ''}{t.audience === 'officer' ? ' · officers and admin only' : ''}</span>
               {t.archived && <span className="ml-2 text-sm text-muted">(archived)</span>}
-              <details><summary className="cursor-pointer text-sm underline">Manage {t.label}</summary><ArchiveTypeForm id={t.id} label={t.label} archived={t.archived} /></details>
+              <details>
+                <summary className="cursor-pointer text-sm underline">Manage {t.label}</summary>
+                <TypeAudienceForm id={t.id} label={t.label} audience={t.audience} />
+                <ArchiveTypeForm id={t.id} label={t.label} archived={t.archived} />
+              </details>
             </li>
           ))}
         </ul>

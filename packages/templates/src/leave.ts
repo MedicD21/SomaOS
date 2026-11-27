@@ -9,6 +9,8 @@ export type LeaveTemplate = {
     leadTimeDays: number;
     requiresDocumentation: boolean;
     countsAsWorked: boolean;
+    /** 'officer' = only approvers and leave managers may request it (admin, discipline, officer codes). Default 'member'. */
+    audience?: 'member' | 'officer';
   }[];
   /** Applied as DRAFT config versions: an admin must edit them to match their contract and approve. */
   policies: { bankKey: string; payload: AccrualPolicy }[];

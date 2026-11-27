@@ -1,6 +1,6 @@
 'use server';
 import type { AccrualPolicy } from '@soma/schedule-engine';
-import { accrualPolicySchema, adjustmentSchema, bankSchema, issuesToFieldErrors, leaveLimitSchema, leaveTypeSchema, parseJsonDocument, unknownPaths } from '@soma/validators';
+import { accrualPolicySchema, adjustmentSchema, bankSchema, issuesToFieldErrors, leaveAudienceSchema, leaveLimitSchema, leaveTypeSchema, parseJsonDocument, unknownPaths } from '@soma/validators';
 import { z } from 'zod';
 import type { ActionResult } from '@/server/actions';
 import { runAdmin, zodFieldErrors } from '@/server/actions';
@@ -35,14 +35,14 @@ export async function addLeaveType(_prev: ActionResult, form: FormData): Promise
   const parsed = leaveTypeSchema.safeParse({
     label: form.get('label'), key: form.get('key') ?? '', bankId: form.get('bankId'),
     requiresDocumentation: form.get('requiresDocumentation'), countsAsWorked: form.get('countsAsWorked'),
-    leadTimeDays: form.get('leadTimeDays') || 0,
+    leadTimeDays: form.get('leadTimeDays') || 0, audience: form.get('audience'),
   });
   if (!parsed.success) return zodFieldErrors(parsed.error.issues);
   const v = parsed.data;
   return runAdmin('leave.manage', form, async (tx) => {
-    await tx`insert into leave_types (tenant_id, key, label, bank_id, requires_documentation, lead_time_days, counts_as_worked, sort)
+    await tx`insert into leave_types (tenant_id, key, label, bank_id, requires_documentation, lead_time_days, counts_as_worked, audience, sort)
              values (app.tenant_id(), ${v.key}, ${v.label}, ${v.bankId}, ${v.requiresDocumentation}, ${v.leadTimeDays}, ${v.countsAsWorked},
-                     (select coalesce(max(sort), 0) + 1 from leave_types))`;
+                     ${v.audience}, (select coalesce(max(sort), 0) + 1 from leave_types))`;
     return `Added ${v.label}`;
   });
 }
@@ -51,6 +51,18 @@ export async function setTypeArchived(id: string, archived: boolean, _prev: Acti
   return runAdmin('leave.manage', form, async (tx) => {
     await tx`update leave_types set archived_at = ${archived ? new Date() : null} where id = ${id}`;
     return archived ? 'Archived' : 'Restored';
+  });
+}
+
+/** Who may request this type. Requests already made keep their type either way. */
+export async function setTypeAudience(id: string, _prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const typeId = z.uuid().safeParse(id);
+  const audience = leaveAudienceSchema.safeParse(form.get('audience'));
+  if (!typeId.success) return { ok: false, message: 'Unknown leave type.' };
+  if (!audience.success) return { ok: false, message: 'Choose who can request it.', fieldErrors: { audience: 'Required' } };
+  return runAdmin('leave.manage', form, async (tx) => {
+    await tx`update leave_types set audience = ${audience.data} where id = ${typeId.data}`;
+    return audience.data === 'officer' ? 'Now officers and admin only' : 'Now open to all members';
   });
 }
 

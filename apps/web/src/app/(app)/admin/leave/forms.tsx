@@ -1,7 +1,7 @@
 'use client';
 import { ActionForm } from '@/components/action-form';
 import { Field, Input, Select } from '@/components/ui/field';
-import { addBank, addLeaveLimit, addLeaveType, adjustBalance, setBankArchived, setLimitArchived, setTypeArchived } from './actions';
+import { addBank, addLeaveLimit, addLeaveType, adjustBalance, setBankArchived, setLimitArchived, setTypeArchived, setTypeAudience } from './actions';
 
 type Opt = { id: string; label: string };
 
@@ -71,11 +71,37 @@ export function AddLeaveTypeForm({ banks }: { banks: Opt[] }) {
           <Field id="lt-lead" label="Days of notice" hint="0 allows same-day and retroactive requests." error={e.leadTimeDays}>
             <Input id="lt-lead" name="leadTimeDays" type="number" min={0} max={365} defaultValue={0} />
           </Field>
+          <Field id="lt-audience" label="Who can request it" hint={AUDIENCE_HINT} error={e.audience}>
+            <AudienceSelect id="lt-audience" defaultValue="member" />
+          </Field>
           <div className="space-y-2 self-end">
             <label className="flex items-center gap-2"><input type="checkbox" name="requiresDocumentation" /> Documentation required</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="countsAsWorked" /> Counts as time worked</label>
           </div>
         </div>
+      )}
+    </ActionForm>
+  );
+}
+
+const AUDIENCE_HINT = 'Officer-only types (admin, discipline, officer codes) are hidden from crew members.';
+
+function AudienceSelect({ id, defaultValue }: { id: string; defaultValue: 'member' | 'officer' }) {
+  return (
+    <Select id={id} name="audience" defaultValue={defaultValue}>
+      <option value="member">All members</option>
+      <option value="officer">Officers and admin only</option>
+    </Select>
+  );
+}
+
+export function TypeAudienceForm({ id, label, audience }: { id: string; label: string; audience: 'member' | 'officer' }) {
+  return (
+    <ActionForm action={setTypeAudience.bind(null, id)} label={`Who can request ${label}`} submitLabel="Save" submitVariant="secondary" className="mt-2 space-y-2">
+      {(e) => (
+        <Field id={`aud-${id}`} label={`Who can request ${label}`} hint={AUDIENCE_HINT} error={e.audience}>
+          <AudienceSelect id={`aud-${id}`} defaultValue={audience} />
+        </Field>
       )}
     </ActionForm>
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isPermission } from '@soma/auth';
-import { accrualPolicySchema, adjustmentSchema, bankSchema, leaveRequestSchema, leaveTypeSchema, parseAccrualPolicyJson } from '../src/index';
+import { accrualPolicySchema, adjustmentSchema, bankSchema, leaveAudienceSchema, leaveRequestSchema, leaveTypeSchema, parseAccrualPolicyJson } from '../src/index';
 
 const valid = () => ({
   period: { kind: 'monthly' },
@@ -64,7 +64,14 @@ describe('bank and leave type schemas', () => {
   it('derive a key from the label', () => {
     expect(bankSchema.parse({ label: 'Sick Leave' }).key).toBe('sick_leave');
     const t = leaveTypeSchema.parse({ label: 'Vacation', bankId: '', leadTimeDays: '7', requiresDocumentation: 'on' });
-    expect(t).toMatchObject({ key: 'vacation', bankId: null, leadTimeDays: 7, requiresDocumentation: true, countsAsWorked: false });
+    expect(t).toMatchObject({ key: 'vacation', bankId: null, leadTimeDays: 7, requiresDocumentation: true, countsAsWorked: false, audience: 'member' });
+  });
+  it('accepts an officer-only audience and rejects unknown audiences', () => {
+    expect(leaveTypeSchema.parse({ label: 'Admin leave', audience: 'officer' }).audience).toBe('officer');
+    expect(leaveTypeSchema.parse({ label: 'Jury duty', audience: '' }).audience).toBe('member');
+    expect(leaveTypeSchema.safeParse({ label: 'X', audience: 'everyone' }).success).toBe(false);
+    expect(leaveAudienceSchema.safeParse('officer').success).toBe(true);
+    expect(leaveAudienceSchema.safeParse('crew').success).toBe(false);
   });
   it('rejects negative lead time', () => {
     expect(leaveTypeSchema.safeParse({ label: 'X', leadTimeDays: '-1' }).success).toBe(false);

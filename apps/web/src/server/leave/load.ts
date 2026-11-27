@@ -33,7 +33,8 @@ export async function loadMyLeave(tx: Tx): Promise<{ balances: Balance[]; types:
   const types = await tx<LeaveTypeOption[]>`
     select t.id, t.label, b.label as bank_label, t.requires_documentation, t.lead_time_days
     from leave_types t left join leave_banks b on b.id = t.bank_id
-    where t.archived_at is null order by t.sort, t.label`;
+    where t.archived_at is null and (t.audience = 'member' or app.can_use_officer_leave())
+    order by t.sort, t.label`;
   const requests = await tx<MyRequest[]>`
     select r.id, t.label as type, r.start_date::text, r.end_date::text, r.hours::float8 as hours, r.status, r.reason, r.decision_note
     from leave_requests r join leave_types t on t.id = r.leave_type_id
