@@ -25,6 +25,11 @@ export function credentialExpiry(v: Validity, issuedOn: IsoDate): IsoDate | null
   }).toString();
 }
 
+/** True when a credential expiring on `expiresOn` (inclusive, local date) still covers `shiftEnd`. */
+export function validThroughShift(expiresOn: IsoDate | null, shiftEnd: Date, tz: string): boolean {
+  return expiresOn === null || shiftEnd.getTime() <= startOfLocalDay(addDays(expiresOn, 1), tz).getTime();
+}
+
 export type SeatRequirement = { anyOf: string[] }[];
 export type SeatRule = {
   requirements: SeatRequirement;
@@ -46,12 +51,9 @@ export function checkQualification(
   let qualified = true;
   let acting = false;
 
-  const validThroughShift = (expiresOn: IsoDate | null): boolean =>
-    expiresOn === null || shiftEnd.getTime() <= startOfLocalDay(addDays(expiresOn, 1), tz).getTime();
-
   for (const group of seat.requirements) {
     const held = member.credentials.filter((c) => group.anyOf.includes(c.typeId));
-    if (held.some((c) => validThroughShift(c.expiresOn))) continue;
+    if (held.some((c) => validThroughShift(c.expiresOn, shiftEnd, tz))) continue;
     qualified = false;
     if (held.length === 0) {
       explain.push({

@@ -49,6 +49,13 @@ export async function applyTemplate(
              from tenants t where t.id = ${tenantId}
              on conflict (tenant_id, kind, key, version) do nothing`;
   }
+  // Starter staffing rules are a DRAFT: nothing is checked until an administrator edits and approves them.
+  if (template.staffingRules) {
+    await tx`insert into config_versions (tenant_id, kind, key, version, status, effective, payload, change_note)
+             values (${tenantId}, 'staffing.rules', 'default', 1, 'draft', tstzrange(null, null),
+                     ${tx.json(template.staffingRules as never)}, 'Starter values from the department template — review before approving')
+             on conflict (tenant_id, kind, key, version) do nothing`;
+  }
   for (const b of template.leave.banks) {
     await tx`insert into leave_banks (tenant_id, key, label) values (${tenantId}, ${b.key}, ${b.label})
              on conflict (tenant_id, key) do nothing`;

@@ -561,6 +561,13 @@ export const delcoEmsDraft: DepartmentTemplate = {
   training: DELCO_TRAINING,
   // 24 on / 48 off from 06:00 for medic units; 2026-11-02 was a "1" day in Aladtec's month view. No Kelly day seen.
   // Captain units (Capt. 461/462) run 07:30-07:30 and need a second pattern.
+  // Research 06 §8.5: at least 25 ALS on duty (Paramedic and AEMT count), 2 ALS per ambulance. The Ohio
+  // certificate is what qualifies a member to practise, so the group uses the Ohio credential types.
+  staffingRules: {
+    groups: [{ key: 'als', label: 'ALS', credentialKeys: ['ohio_paramedic', 'ohio_aemt'] }],
+    departmentMinimums: [{ group: 'als', min: 25 }],
+    unitRules: [{ group: 'als', unitTypeKey: 'unit', min: 2 }],
+  },
   schedulePattern: {
     key: 'default',
     payload: {

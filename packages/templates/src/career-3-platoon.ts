@@ -40,6 +40,13 @@ export const career3Platoon: DepartmentTemplate = {
   pay: careerPay(CAREER_LEAVE),
   documents: STARTER_DOCUMENTS,
   training: STARTER_TRAINING,
+  // Starter values (Delaware County EMS research 06 §8.5): Paramedic and AEMT count as ALS, 2 ALS per unit.
+  // The department minimum is a placeholder for each department to set before approving.
+  staffingRules: {
+    groups: [{ key: 'als', label: 'ALS', credentialKeys: ['paramedic', 'aemt'] }],
+    departmentMinimums: [{ group: 'als', min: 25 }],
+    unitRules: [{ group: 'als', unitTypeKey: 'unit', min: 2 }],
+  },
   schedulePattern: {
     key: 'default',
     payload: {

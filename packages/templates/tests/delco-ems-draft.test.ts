@@ -88,4 +88,13 @@ describe('Delaware County EMS draft template', () => {
       if (c.credentialTypeKey) expect(creds.has(c.credentialTypeKey), c.key).toBe(true);
     }
   });
+
+  it('staffing rules: 25 ALS department-wide and 2 per unit, from its own credential and unit types', () => {
+    const r = t.staffingRules!;
+    const creds = new Set(t.credentialTypes.map((c) => c.key));
+    for (const k of r.groups[0]!.credentialKeys) expect(creds.has(k), k).toBe(true);
+    expect(r.departmentMinimums).toEqual([{ group: 'als', min: 25 }]);
+    expect(r.unitRules).toEqual([{ group: 'als', unitTypeKey: 'unit', min: 2 }]);
+    expect(t.orgUnitTypes.map((u) => u.key)).toContain('unit');
+  });
 });

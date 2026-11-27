@@ -21,3 +21,4 @@ export * from './inventory';
 export * from './rule-fields';
 export * from './custody';
 export * from './training';
+export * from './staffing';
