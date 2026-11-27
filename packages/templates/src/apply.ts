@@ -61,8 +61,9 @@ export async function applyTemplate(
              on conflict (tenant_id, key) do nothing`;
   }
   for (const [i, lt] of template.leave.types.entries()) {
-    await tx`insert into leave_types (tenant_id, key, label, bank_id, requires_documentation, lead_time_days, counts_as_worked, sort)
-             select ${tenantId}, ${lt.key}, ${lt.label}, b.id, ${lt.requiresDocumentation}, ${lt.leadTimeDays}, ${lt.countsAsWorked}, ${i + 1}
+    await tx`insert into leave_types (tenant_id, key, label, bank_id, requires_documentation, lead_time_days, counts_as_worked, audience, sort)
+             select ${tenantId}, ${lt.key}, ${lt.label}, b.id, ${lt.requiresDocumentation}, ${lt.leadTimeDays}, ${lt.countsAsWorked},
+                    ${lt.audience ?? 'member'}, ${i + 1}
              from (select 1) x left join leave_banks b on b.tenant_id = ${tenantId} and b.key = ${lt.bankKey}
              on conflict (tenant_id, key) do nothing`;
   }

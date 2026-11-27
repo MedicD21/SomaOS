@@ -73,6 +73,11 @@ export const bankSchema = z
   .object({ label: labelSchema, key: keySchema.optional().or(z.literal('')) })
   .transform((v) => withKey({ label: v.label, key: v.key || undefined }));
 
+/** Who may request a leave type: any member, or only approvers and leave managers (admin, discipline, officer codes). */
+export const LEAVE_AUDIENCES = ['member', 'officer'] as const;
+export const leaveAudienceSchema = z.enum(LEAVE_AUDIENCES);
+export type LeaveAudience = z.infer<typeof leaveAudienceSchema>;
+
 export const leaveTypeSchema = z
   .object({
     label: labelSchema,
@@ -81,8 +86,9 @@ export const leaveTypeSchema = z
     requiresDocumentation: checkbox,
     countsAsWorked: checkbox,
     leadTimeDays: z.coerce.number().int().min(0).max(365).default(0),
+    audience: z.preprocess((v) => (v === '' || v == null ? 'member' : v), leaveAudienceSchema),
   })
-  .transform((v) => ({ ...withKey({ label: v.label, key: v.key || undefined }), bankId: v.bankId, requiresDocumentation: v.requiresDocumentation, countsAsWorked: v.countsAsWorked, leadTimeDays: v.leadTimeDays }));
+  .transform((v) => ({ ...withKey({ label: v.label, key: v.key || undefined }), bankId: v.bankId, requiresDocumentation: v.requiresDocumentation, countsAsWorked: v.countsAsWorked, leadTimeDays: v.leadTimeDays, audience: v.audience }));
 
 export const leaveRequestSchema = z
   .object({

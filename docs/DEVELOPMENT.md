@@ -124,7 +124,9 @@ Design: master design §7.2. Plan: `docs/superpowers/plans/2026-11-24-phase-1b-l
 ### Concepts
 - **Leave bank** — a balance members draw from (Vacation, Sick, Compensatory time…). **Leave type** — what a member
   requests (Vacation, FMLA…). A type draws from one bank, or from none (balance-free types such as FMLA are only logged).
-  Both are managed under **Admin → Leave**.
+  A type's **audience** is `member` (anyone with `leave.request`) or `officer` (only holders of `leave.approve` or
+  `leave.manage`; for admin, discipline and officer codes). Crew never see officer types on the request form, and
+  `request_leave` refuses them. Both are managed under **Admin → Leave**.
 - **Ledger** — a bank's balance is the sum of `leave_ledger` rows (`earn`, `use`, `reversal`, `adjust`, `expire`,
   `payout`; signed hours). The ledger is **append-only**: no API role can update, delete or truncate it. Mistakes are
   fixed with a new `adjust` or `reversal` row. Automated postings carry a `run_key` (unique per member and bank), which is
@@ -141,7 +143,7 @@ Requests and the ledger have no direct write access. `app.request_leave`, `app.d
 
 | Function | Who | Rules |
 |---|---|---|
-| `request_leave` | a member, for themselves (`leave.request`) | lead time; enough balance after other pending requests unless the approved policy has `negativeAllowed` |
+| `request_leave` | a member, for themselves (`leave.request`) | type's audience (officer types need `leave.approve`/`leave.manage`); lead time; enough balance after other pending requests unless the approved policy has `negativeAllowed` |
 | `decide_leave` | someone with `leave.approve` whose grant covers the member | covers = department scope, or an org-unit subtree containing the member's station, and the grant's shift (if any) matches the member's shift. The member's place is their primary assignment, else their standing seat. **Nobody decides their own leave.** Balance is re-checked at approval. |
 | `cancel_leave` | the member (before it starts) or an approver | approved leave is reversed once and its shifts restored; if a seat was refilled meanwhile it fails and nothing changes |
 | `adjust_leave` | department-wide `leave.manage` | needs a note of at least 5 characters |

@@ -91,6 +91,19 @@ describe('applyTemplate', () => {
     });
   });
 
+  it('leave: carries each type\'s audience, defaulting to member', async () => {
+    await withAdmin(async (tx) => {
+      const t = await createTenant(tx);
+      const u = await createTestUser(tx);
+      const base = TEMPLATES['career-3-platoon'];
+      const types = base.leave.types.map((lt) => (lt.key === 'military' ? { ...lt, audience: 'officer' as const } : lt));
+      await applyTemplate(tx, t, { ...base, leave: { ...base.leave, types } }, { userId: u, firstName: 'Ana', lastName: 'Chief' });
+      const rows = await tx<{ key: string; audience: string }[]>`
+        select key, audience from leave_types where tenant_id = ${t} and audience <> 'member'`;
+      expect([...rows]).toEqual([{ key: 'military', audience: 'officer' }]);
+    });
+  });
+
   it('pay: creates codes, a group and DRAFT rules, idempotently', async () => {
     await withAdmin(async (tx) => {
       const t = await createTenant(tx);
