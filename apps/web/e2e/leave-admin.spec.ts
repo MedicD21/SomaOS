@@ -36,6 +36,19 @@ test('admin manages leave banks, types, policy versions and balances', async ({ 
   await type.getByRole('button', { name: 'Add leave type' }).click();
   await expect(type.getByRole('status')).toHaveText('Added Personal day');
 
+  // Officer-only types are hidden from crew; the toggle under Manage changes it later.
+  await type.getByLabel('Label').fill('Admin leave');
+  await type.getByLabel('Who can request it').selectOption({ label: 'Officers and admin only' });
+  await type.getByRole('button', { name: 'Add leave type' }).click();
+  await expect(type.getByRole('status')).toHaveText('Added Admin leave');
+  const types = page.getByRole('list', { name: 'Leave types' });
+  await expect(types.getByRole('listitem').filter({ hasText: 'Admin leave' })).toContainText('officers and admin only');
+  await types.getByText('Manage Personal day').click();
+  const audience = page.getByRole('form', { name: 'Who can request Personal day' });
+  await audience.getByLabel('Who can request Personal day').selectOption('officer');
+  await audience.getByRole('button', { name: 'Save' }).click();
+  await expect(audience.getByRole('status')).toHaveText('Now officers and admin only');
+
   // Policy: starter template values are drafts, invalid JSON is explained, valid JSON saves
   const editor = page.getByRole('form', { name: 'Edit Vacation policy' });
   await expect(page.getByTestId('policy-status-vacation')).toContainText('Draft');
@@ -102,11 +115,18 @@ test('admin manages leave banks, types, policy versions and balances', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 
-test('members cannot open leave administration', async ({ page }) => {
+test('members cannot open leave administration or see officer-only leave', async ({ page }) => {
   await sql`update profiles set active_tenant_id = (select id from tenants where slug = 'demo-fire-rescue')
             where user_id = (select id from auth.users where email = 'member@soma.local')`;
+  await sql`insert into leave_types (tenant_id, key, label, audience)
+            select id, 'e2e_discipline', 'Discipline (e2e)', 'officer' from tenants where slug = 'demo-fire-rescue'
+            on conflict (tenant_id, key) do nothing`;
   await login(page, 'member@soma.local');
   await expect(page).toHaveURL('/');
+  await page.goto('/leave');
+  const options = page.getByRole('form', { name: 'Request leave' }).getByLabel('Leave type').locator('option');
+  await expect(options.filter({ hasText: 'Vacation' })).toHaveCount(1);
+  await expect(options.filter({ hasText: 'Discipline (e2e)' })).toHaveCount(0);
   await page.goto('/admin/leave');
   await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible();
 });
