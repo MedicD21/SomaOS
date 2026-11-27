@@ -39,12 +39,15 @@ Versioned, effective-dated and approved like shift patterns, so a change in the 
 ### 2. Evaluation is a pure engine function (`packages/schedule-engine/src/staffing.ts`)
 - `evaluateStaffing(rules, day)` takes the day's seated assignments (member, unit, unit type, seat, group keys) and
   returns the department counts against each minimum, per-unit counts, and violations with `Explain` traces.
-- "On duty on day D" = scheduled, seated assignments that **start** on local date D, the same window as the roster
-  page. Kelly, training and detail rows hold no seat and do not count.
-- `suggestTransfers(evaluation)`: only when every department minimum is met. For each short unit, donors are units
-  under the same rule with more than `min` group members (Delaware: 3 ALS). Donors with the biggest surplus go first;
-  within a donor, a member in a seat with no minimum rank is preferred (so the officer is not moved), then the
-  highest-sorted seat. A donor is never taken below `min`. Suggestions only: the officer makes the move with the
+- **Checked minute by minute** (owner, 2026-11-27: the minimum applies even to a 20-minute dip). The window is the
+  operational day: 24 hours from the shift pattern's start time on date D. Every scheduled, seated shift overlapping
+  it counts while it is on, so split seats (06–12 / 12–06) and the previous day's crew are counted correctly. A
+  check's count is the lowest head count at any moment; each violation lists the times below the minimum. Kelly,
+  training and detail rows hold no seat and do not count.
+- `suggestTransfers`: only when the department minimum holds for the whole window. For each short unit, a shift is
+  moved from another unit of the same type only if the donor still meets `min` at every moment afterwards (Delaware:
+  a unit with 3 ALS) and the short unit's gap shrinks. Donors with the biggest surplus go first; within a donor, a
+  member in a seat with no minimum rank is preferred (so the officer is not moved), then the highest-sorted seat. Suggestions only: the officer makes the move with the
   existing Cancel and Fill (applying a TT in one step is a follow-up).
 - `mandateCandidates(entries, context)`: walks the list in order and returns each member with a status: `eligible`,
   `exempt` (reason, until), `working` (already scheduled at that time), `on_leave` (pending or approved leave that
@@ -127,7 +130,5 @@ Versioned, effective-dated and approved like shift patterns, so a change in the 
 9. **TT details:** may a Lieutenant be moved in a TT? Is mileage recorded for a TT (CBA 17.3)?
 
 ## Known limits
-- Counts are per roster day (shifts starting that day), not minute by minute. A split seat (06–12/12–06) counts each
-  member who starts that day once; partial-shift coverage gaps are not detected.
 - TT suggestions are not applied in one step; the officer cancels and fills.
 - Out-of-class (acting Lieutenant/Captain) eligibility lists are research item 12, not in this slice.

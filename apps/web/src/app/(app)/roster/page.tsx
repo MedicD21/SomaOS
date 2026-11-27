@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { addDays, localDateOf, startOfLocalDay } from '@soma/schedule-engine';
+import { addDays, describeGaps, localDateOf, startOfLocalDay, type GroupCheck } from '@soma/schedule-engine';
 import { Forbidden } from '@/components/forbidden';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -144,6 +144,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
                 key={u.orgUnitId}
                 unit={u}
                 unitChecks={staffing?.evaluation.units.find((x) => x.unitId === u.orgUnitId)?.checks ?? []}
+                tz={staffing?.window.tz ?? tz}
                 date={date}
                 members={members}
                 canEdit={check(ctx, 'scheduling.roster.edit', { orgUnitPath: u.path }).allowed}
@@ -169,17 +170,21 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
 }
 
 function StaffingBanner({ staffing, date, canMandate }: { staffing: StaffingDay; date: string; canMandate: boolean }) {
-  const { evaluation, transfers } = staffing;
+  const { evaluation, transfers, window } = staffing;
+  const clock = (d: Date) => new Intl.DateTimeFormat('en-US', { timeZone: window.tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
   const deptShort = evaluation.department.some((d) => !d.met);
   const unitsShort = evaluation.units.filter((u) => u.violations.length > 0);
   return (
     <section aria-labelledby="staffing-heading" className={`rounded-lg border bg-surface p-4 shadow-sm sm:p-6 ${evaluation.met ? 'border-line' : 'border-danger'}`}>
       <h2 id="staffing-heading" className="mb-2 text-lg font-semibold">Minimum staffing</h2>
+      <p className="mb-2 text-sm text-muted">
+        Checked minute by minute from {clock(window.start)} to {clock(window.end)}; counts are the lowest on duty at any moment.
+      </p>
       <ul className="space-y-1">
         {evaluation.department.map((d) => (
           <li key={d.group} className={`font-semibold ${d.met ? '' : 'text-danger'}`}>
             Department {d.label}: <span data-testid={`dept-${d.group}`}>{`${d.count}/${d.min}`}</span>
-            {d.met ? ' — met' : ` — ${d.shortfall} short`}
+            {d.met ? ' — met' : ` — ${d.shortfall} short: ${describeGaps(d.gaps, window.tz)}`}
           </li>
         ))}
         {unitsShort.flatMap((u) => u.violations).map((v, i) => (
@@ -206,9 +211,10 @@ function StaffingBanner({ staffing, date, canMandate }: { staffing: StaffingDay;
   );
 }
 
-function UnitTable({ unit, unitChecks, date, members, canEdit, canOverride, shiftStart, shiftHours }: {
+function UnitTable({ unit, unitChecks, tz, date, members, canEdit, canOverride, shiftStart, shiftHours }: {
   unit: RosterUnitView;
-  unitChecks: { group: string; label: string; min: number; count: number; met: boolean }[];
+  unitChecks: GroupCheck[];
+  tz: string;
   date: string;
   members: MemberOption[];
   canEdit: boolean;
@@ -226,7 +232,7 @@ function UnitTable({ unit, unitChecks, date, members, canEdit, canOverride, shif
       {unitChecks.map((c) => (
         <p key={c.group} className={`mb-2 text-sm font-semibold ${c.met ? '' : 'text-danger'}`}>
           {c.label} <span data-testid={`unit-${c.group}`}>{`${c.count}/${c.min}`}</span>
-          {c.met ? '' : ' — below the unit minimum'}
+          {c.met ? '' : ` — below the unit minimum: ${describeGaps(c.gaps, tz)}`}
         </p>
       ))}
       <div className="overflow-x-auto">

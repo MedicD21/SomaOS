@@ -21,7 +21,10 @@ export type StaffingRules = {
 
 export type StaffingUnit = { id: string; name: string; typeKey: string };
 
-/** One member on one seat for the day being evaluated. */
+/** The stretch of time checked, usually one operational day (e.g. 06:00 to 06:00 local). */
+export type StaffingWindow = { start: Date; end: Date; tz: string };
+
+/** One member on one seat for one shift that overlaps the window. */
 export type OnDuty = {
   memberId: string;
   memberName: string;
@@ -33,9 +36,15 @@ export type OnDuty = {
   seatHasMinRank: boolean;
   /** Group keys this member counts for on this shift (see `memberGroups`). */
   groups: string[];
+  start: Date;
+  end: Date;
 };
 
-export type GroupCheck = { group: string; label: string; min: number; count: number; met: boolean };
+/** A stretch of the window below a minimum, with the lowest count during it. */
+export type Gap = { from: Date; to: Date; count: number };
+
+/** `count` is the lowest number on duty at any moment of the window; `gaps` are the times below `min`. */
+export type GroupCheck = { group: string; label: string; min: number; count: number; met: boolean; gaps: Gap[] };
 
 export type StaffingEvaluation = {
   department: (GroupCheck & { shortfall: number })[];
@@ -53,6 +62,7 @@ export type TransferSuggestion = {
   memberId: string;
   memberName: string;
   seatLabel: string;
+  start: Date;
   explain: Explain;
 };
 
@@ -69,25 +79,83 @@ export function memberGroups(
 
 const labelOf = (rules: StaffingRules, group: string): string => rules.groups.find((g) => g.key === group)?.label ?? group;
 
-function distinctIn(onDuty: OnDuty[], group: string, unitId?: string): Set<string> {
-  return new Set(
-    onDuty.filter((d) => d.groups.includes(group) && (unitId === undefined || d.unitId === unitId)).map((d) => d.memberId),
+type Segment = { from: number; to: number; count: number };
+
+/**
+ * Piecewise-constant head count over the window: distinct members of `group` (in `unitId` when
+ * given) on duty in each stretch between shift starts and ends. A shift counts on [start, end).
+ */
+function segments(onDuty: OnDuty[], group: string, window: StaffingWindow, unitId?: string): Segment[] {
+  const ws = window.start.getTime();
+  const we = window.end.getTime();
+  const rows = onDuty.filter(
+    (d) => d.groups.includes(group) && (unitId === undefined || d.unitId === unitId) && d.start.getTime() < we && d.end.getTime() > ws,
   );
+  const points = new Set([ws, we]);
+  for (const r of rows) {
+    for (const t of [r.start.getTime(), r.end.getTime()]) if (t > ws && t < we) points.add(t);
+  }
+  const sorted = [...points].sort((a, b) => a - b);
+  const out: Segment[] = [];
+  for (let i = 0; i + 1 < sorted.length; i += 1) {
+    const from = sorted[i]!;
+    const members = new Set(rows.filter((r) => r.start.getTime() <= from && r.end.getTime() > from).map((r) => r.memberId));
+    out.push({ from, to: sorted[i + 1]!, count: members.size });
+  }
+  return out;
 }
 
-export function evaluateStaffing(rules: StaffingRules, units: StaffingUnit[], onDuty: OnDuty[]): StaffingEvaluation {
+const lowest = (segs: Segment[]): number => (segs.length ? Math.min(...segs.map((s) => s.count)) : 0);
+
+function gapsBelow(segs: Segment[], min: number): Gap[] {
+  const gaps: Gap[] = [];
+  let open: { from: number; to: number; count: number } | null = null;
+  for (const s of segs) {
+    if (s.count < min) {
+      if (open && open.to === s.from) {
+        open.to = s.to;
+        open.count = Math.min(open.count, s.count);
+      } else {
+        if (open) gaps.push({ from: new Date(open.from), to: new Date(open.to), count: open.count });
+        open = { ...s };
+      }
+    }
+  }
+  if (open) gaps.push({ from: new Date(open.from), to: new Date(open.to), count: open.count });
+  return gaps;
+}
+
+const deficitMs = (segs: Segment[], min: number): number =>
+  segs.reduce((n, s) => n + (s.count < min ? (min - s.count) * (s.to - s.from) : 0), 0);
+
+function clock(d: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
+}
+
+/** "12:00–12:20 (4 on duty)", joined with "; ". */
+export function describeGaps(gaps: Gap[], tz: string): string {
+  return gaps.map((g) => `${clock(g.from, tz)}–${clock(g.to, tz)} (${g.count} on duty)`).join('; ');
+}
+
+function check(group: string, label: string, min: number, segs: Segment[]): GroupCheck {
+  const count = lowest(segs);
+  return { group, label, min, count, met: count >= min, gaps: gapsBelow(segs, min) };
+}
+
+/** Checks every minimum at every moment of the window: a dip of any length is a violation. */
+export function evaluateStaffing(rules: StaffingRules, units: StaffingUnit[], onDuty: OnDuty[], window: StaffingWindow): StaffingEvaluation {
   const violations: Explain[] = [];
   const department = rules.departmentMinimums.map(({ group, min }) => {
-    const count = distinctIn(onDuty, group).size;
     const label = labelOf(rules, group);
-    if (count < min) {
+    const c = check(group, label, min, segments(onDuty, group, window));
+    if (!c.met) {
       violations.push({
         rule: 'staffing.department_below_minimum',
-        message: `${count} ${label} on duty; the department minimum is ${min}`,
-        data: { group, count, min },
+        message: `${label} below the department minimum of ${min}: ${describeGaps(c.gaps, window.tz)}`,
+        data: { group, lowest: c.count, min },
       });
     }
-    return { group, label, min, count, met: count >= min, shortfall: Math.max(0, min - count) };
+    return { ...c, shortfall: Math.max(0, min - c.count) };
   });
 
   const unitViews = units.map((u) => {
@@ -95,16 +163,16 @@ export function evaluateStaffing(rules: StaffingRules, units: StaffingUnit[], on
     const checks = rules.unitRules
       .filter((r) => r.unitTypeKey === u.typeKey)
       .map(({ group, min }) => {
-        const count = distinctIn(onDuty, group, u.id).size;
         const label = labelOf(rules, group);
-        if (count < min) {
+        const c = check(group, label, min, segments(onDuty, group, window, u.id));
+        if (!c.met) {
           unitViolations.push({
             rule: 'staffing.unit_below_minimum',
-            message: `${u.name} has ${count} ${label}; at least ${min} required`,
-            data: { unitId: u.id, group, count, min },
+            message: `${u.name} below ${min} ${label}: ${describeGaps(c.gaps, window.tz)}`,
+            data: { unitId: u.id, group, lowest: c.count, min },
           });
         }
-        return { group, label, min, count, met: count >= min };
+        return c;
       });
     violations.push(...unitViolations);
     return { unitId: u.id, name: u.name, checks, violations: unitViolations };
@@ -114,42 +182,58 @@ export function evaluateStaffing(rules: StaffingRules, units: StaffingUnit[], on
 }
 
 /**
- * TT suggestions: for each unit rule, when the department minimum for that group is met (or
- * none is set), fill each short unit from units holding more than the minimum. A donor never
- * drops below the minimum. Donors with the biggest surplus go first, then the one used least,
- * then by name. Within a donor, members not in an officer seat go first, then the highest seat.
+ * TT suggestions: for each unit rule, when the department minimum for that group holds for the
+ * whole window (or none is set), cover each short unit from other units of the same type. A move
+ * is suggested only if the donor still meets the minimum at every moment afterwards and the short
+ * unit's gap shrinks. Donors with the biggest surplus go first, then the one used least, then by
+ * name; within a donor, members not in an officer seat go first, then the highest seat.
  */
-export function suggestTransfers(rules: StaffingRules, units: StaffingUnit[], onDuty: OnDuty[]): TransferSuggestion[] {
+export function suggestTransfers(rules: StaffingRules, units: StaffingUnit[], onDuty: OnDuty[], window: StaffingWindow): TransferSuggestion[] {
   const out: TransferSuggestion[] = [];
-  const moved = new Set<string>();
+  const rows = onDuty.map((d) => ({ ...d }));
+  const moved = new Set<number>();
   for (const rule of rules.unitRules) {
     const deptMin = rules.departmentMinimums.find((m) => m.group === rule.group);
-    if (deptMin && distinctIn(onDuty, rule.group).size < deptMin.min) continue;
+    if (deptMin && lowest(segments(rows, rule.group, window)) < deptMin.min) continue;
 
     const ruleUnits = units.filter((u) => u.typeKey === rule.unitTypeKey).sort((a, b) => a.name.localeCompare(b.name));
-    const count = new Map(ruleUnits.map((u) => [u.id, distinctIn(onDuty, rule.group, u.id).size]));
+    const ruleUnitIds = new Set(ruleUnits.map((u) => u.id));
+    const byId = new Map(ruleUnits.map((u) => [u.id, u]));
+    const segsOf = (unitId: string) => segments(rows, rule.group, window, unitId);
     const used = new Map<string, number>();
     const label = labelOf(rules, rule.group);
 
     for (const short of ruleUnits) {
-      while ((count.get(short.id) ?? 0) < rule.min) {
-        const donors = ruleUnits
-          .filter((u) => u.id !== short.id && (count.get(u.id) ?? 0) > rule.min)
+      while (lowest(segsOf(short.id)) < rule.min) {
+        const before = deficitMs(segsOf(short.id), rule.min);
+        const beforeLowest = lowest(segsOf(short.id));
+        const surplus = new Map(ruleUnits.map((u) => [u.id, lowest(segsOf(u.id)) - rule.min]));
+        const candidates = rows
+          .map((r, i) => ({ r, i }))
+          .filter(({ r, i }) => !moved.has(i) && r.unitId !== short.id && ruleUnitIds.has(r.unitId) && r.groups.includes(rule.group))
           .sort(
             (a, b) =>
-              (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0) ||
-              (used.get(a.id) ?? 0) - (used.get(b.id) ?? 0) ||
-              a.name.localeCompare(b.name),
+              (surplus.get(b.r.unitId) ?? 0) - (surplus.get(a.r.unitId) ?? 0) ||
+              (used.get(a.r.unitId) ?? 0) - (used.get(b.r.unitId) ?? 0) ||
+              byId.get(a.r.unitId)!.name.localeCompare(byId.get(b.r.unitId)!.name) ||
+              Number(a.r.seatHasMinRank) - Number(b.r.seatHasMinRank) ||
+              b.r.seatSort - a.r.seatSort,
           );
-        const donor = donors[0];
-        if (!donor) break;
-        const candidate = onDuty
-          .filter((d) => d.unitId === donor.id && d.groups.includes(rule.group) && !moved.has(d.memberId))
-          .sort((a, b) => Number(a.seatHasMinRank) - Number(b.seatHasMinRank) || b.seatSort - a.seatSort)[0];
-        if (!candidate) break;
-        moved.add(candidate.memberId);
-        count.set(donor.id, (count.get(donor.id) ?? 0) - 1);
-        count.set(short.id, (count.get(short.id) ?? 0) + 1);
+        let accepted: { r: OnDuty; i: number; donor: StaffingUnit } | null = null;
+        for (const { r, i } of candidates) {
+          const donor = byId.get(r.unitId)!;
+          r.unitId = short.id;
+          const donorOk = lowest(segsOf(donor.id)) >= rule.min;
+          const improved = lowest(segsOf(short.id)) > beforeLowest || deficitMs(segsOf(short.id), rule.min) < before;
+          if (donorOk && improved) {
+            accepted = { r, i, donor };
+            break;
+          }
+          r.unitId = donor.id;
+        }
+        if (!accepted) break;
+        const { r, i, donor } = accepted;
+        moved.add(i);
         used.set(donor.id, (used.get(donor.id) ?? 0) + 1);
         out.push({
           group: rule.group,
@@ -157,12 +241,13 @@ export function suggestTransfers(rules: StaffingRules, units: StaffingUnit[], on
           fromUnitName: donor.name,
           toUnitId: short.id,
           toUnitName: short.name,
-          memberId: candidate.memberId,
-          memberName: candidate.memberName,
-          seatLabel: candidate.seatLabel,
+          memberId: r.memberId,
+          memberName: r.memberName,
+          seatLabel: r.seatLabel,
+          start: r.start,
           explain: {
             rule: 'staffing.temporary_transfer',
-            message: `Move ${candidate.memberName} (${label}) from ${donor.name} to ${short.name}; ${donor.name} keeps ${rule.min}`,
+            message: `Move ${r.memberName} (${label}, shift from ${clock(r.start, window.tz)}) from ${donor.name} to ${short.name}; ${donor.name} keeps ${rule.min}`,
             data: { group: rule.group, min: rule.min },
           },
         });

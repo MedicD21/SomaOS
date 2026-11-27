@@ -4,6 +4,7 @@ import { expectAccessible, login } from './helpers';
 
 // Uses dates ~300 days out and its own unit type so other specs' rosters and the demo units are not involved.
 const isoPlus = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+const D0 = isoPlus(299);
 const D1 = isoPlus(300);
 const D2 = isoPlus(301);
 const D3 = isoPlus(302);
@@ -64,8 +65,9 @@ test('staffing flags, TT suggestion, mandate list edit, reorder, mandate and rot
   const ben = await member('Ben', 'Beta', para!.id);
   const cy = await member('Cy', 'Gamma', emt!.id);
 
-  // Same crews on D1 and D2: A has 3 ALS, B has 1 ALS + 1 EMT and a vacant seat.
-  for (const d of [D1, D2]) {
+  // Same crews every day from D0 to D3 (staffing is checked minute by minute, so the crew before and after
+  // each operational day matters): A has 3 ALS, B has 1 ALS + 1 EMT and a vacant seat.
+  for (const d of [D0, D1, D2, D3]) {
     const crew: [string, string][] = [[p1, seatsA[0]!], [p2, seatsA[1]!], [p3, seatsA[2]!], [p4, seatsB[0]!], [e1, seatsB[1]!]];
     for (const [m, s] of crew) {
       await sql`insert into shift_assignments (tenant_id, member_id, seat_id, during, type, source)
@@ -96,13 +98,14 @@ test('staffing flags, TT suggestion, mandate list edit, reorder, mandate and rot
   await page.goto(`/roster?date=${D1}`);
   const banner = page.getByRole('region', { name: 'Minimum staffing' });
   await expect(banner.getByTestId('dept-als')).toHaveText('4/4');
-  await expect(banner).toContainText('Mandate Medic B has 1 ALS; at least 2 required');
+  await expect(banner).toContainText('Mandate Medic B below 2 ALS');
   await expect(page.getByTestId('tt-suggestions')).toContainText('from Mandate Medic A to Mandate Medic B');
   await expect(page.getByRole('region', { name: 'Mandate Medic B' }).getByTestId('unit-als')).toHaveText('1/2');
 
   // 2. Roster on D2: one short, no TT, pointer to the mandate list.
   await page.goto(`/roster?date=${D2}`);
   await expect(banner.getByTestId('dept-als')).toHaveText('4/5');
+  await expect(banner).toContainText('1 short');
   await expect(page.getByTestId('tt-suggestions')).toHaveCount(0);
   await expect(banner.getByRole('link', { name: 'mandate list' })).toBeVisible();
 
@@ -176,6 +179,6 @@ test('staffing flags, TT suggestion, mandate list edit, reorder, mandate and rot
 
   // Tidy up rows another spec could count (far-future dates, own unit type).
   await sql`update shift_assignments set status = 'cancelled', cancelled_reason = 'e2e cleanup'
-            where seat_id = any (${[...seatsA, ...seatsB]}::uuid[]) and lower(during) >= (${D1}::date)::timestamp at time zone 'UTC'
+            where seat_id = any (${[...seatsA, ...seatsB]}::uuid[]) and lower(during) >= (${D0}::date)::timestamp at time zone 'UTC'
               and lower(during) < (${D3}::date + 1)::timestamp at time zone 'UTC'`;
 });

@@ -2,6 +2,8 @@ import 'server-only';
 import {
   addDays,
   evaluateStaffing,
+  localPlusHoursToInstant,
+  localToInstant,
   memberGroups,
   startOfLocalDay,
   suggestTransfers,
@@ -9,17 +11,19 @@ import {
   type OnDuty,
   type StaffingEvaluation,
   type StaffingRules,
+  type StaffingWindow,
   type TransferSuggestion,
 } from '@soma/schedule-engine';
 import type { Tx } from '@/server/db';
 import { ActionError } from '@/server/errors';
-import { loadSeats } from './load';
+import { loadPatterns, loadSeats } from './load';
 
 export const STAFFING_KIND = 'staffing.rules';
 export const STAFFING_KEY = 'default';
 
 export type StaffingDay = {
   rules: StaffingRules;
+  window: StaffingWindow;
   evaluation: StaffingEvaluation;
   transfers: TransferSuggestion[];
 };
@@ -57,12 +61,25 @@ export async function loadCredentialKeys(tx: Tx, memberIds: string[]): Promise<M
 }
 
 /**
- * Staffing for one local date across the whole department: every seated, scheduled shift that
- * starts that day counts. Null when the department has no approved staffing rules.
+ * The operational day checked for `date`: 24 hours from the shift pattern's start time (local),
+ * or from midnight when no pattern is approved.
+ */
+export async function staffingWindow(tx: Tx, date: IsoDate): Promise<StaffingWindow> {
+  const tz = await tenantTz(tx);
+  const dayEnd = startOfLocalDay(addDays(date, 1), tz).getTime();
+  const shiftStart = (await loadPatterns(tx)).filter((p) => p.effectiveFrom.getTime() < dayEnd).at(-1)?.payload.shiftStart ?? '00:00';
+  return { start: localToInstant(date, shiftStart, tz), end: localPlusHoursToInstant(date, shiftStart, 24, tz), tz };
+}
+
+/**
+ * Staffing for one operational day across the whole department, moment by moment: every seated,
+ * scheduled shift overlapping the window counts while it is on (split seats and the previous
+ * day's crew included). Null when the department has no approved staffing rules.
  */
 export async function evaluateStaffingDay(tx: Tx, date: IsoDate): Promise<StaffingDay | null> {
   const rules = await loadStaffingRules(tx, date);
   if (!rules) return null;
+  const window = await staffingWindow(tx, date);
 
   const units = await tx<{ id: string; name: string; type_key: string }[]>`
     select ou.id, ou.name, t.key as type_key
@@ -72,40 +89,37 @@ export async function evaluateStaffingDay(tx: Tx, date: IsoDate): Promise<Staffi
     order by ou.path`;
   const seats = await loadSeats(tx, {});
   const seatById = new Map(seats.map((s) => [s.id, s]));
-  const windows = seats.map((s) => ({
-    seat_id: s.id,
-    lo: startOfLocalDay(date, s.tz).toISOString(),
-    hi: startOfLocalDay(addDays(date, 1), s.tz).toISOString(),
-  }));
-  const rows = windows.length
-    ? await tx<{ seat_id: string; member_id: string; name: string; end: Date }[]>`
-        select a.seat_id, a.member_id, m.first_name || ' ' || m.last_name as name, upper(a.during) as "end"
-        from jsonb_to_recordset(${tx.json(windows)}::jsonb) as w(seat_id uuid, lo timestamptz, hi timestamptz)
-        join shift_assignments a on a.seat_id = w.seat_id
-        join members m on m.id = a.member_id
-        where a.tenant_id = app.tenant_id() and a.status = 'scheduled'
-          and lower(a.during) >= w.lo and lower(a.during) < w.hi`
-    : [];
+  const rows = await tx<{ seat_id: string; member_id: string; name: string; start: Date; end: Date }[]>`
+    select a.seat_id, a.member_id, m.first_name || ' ' || m.last_name as name, lower(a.during) as start, upper(a.during) as "end"
+    from shift_assignments a join members m on m.id = a.member_id
+    where a.tenant_id = app.tenant_id() and a.status = 'scheduled' and a.seat_id is not null
+      and a.during && tstzrange(${window.start.toISOString()}::timestamptz, ${window.end.toISOString()}::timestamptz)
+    order by lower(a.during)`;
   const creds = await loadCredentialKeys(tx, [...new Set(rows.map((r) => r.member_id))]);
 
-  const onDuty: OnDuty[] = rows.map((r) => {
-    const seat = seatById.get(r.seat_id)!;
-    return {
-      memberId: r.member_id,
-      memberName: r.name,
-      unitId: seat.orgUnitId,
-      seatId: seat.id,
-      seatLabel: seat.label,
-      seatSort: seat.sort,
-      seatHasMinRank: seat.rule.minRankSort !== null,
-      groups: memberGroups(rules, creds.get(r.member_id) ?? [], r.end, seat.tz),
-    };
-  });
+  const onDuty: OnDuty[] = rows
+    .filter((r) => seatById.has(r.seat_id))
+    .map((r) => {
+      const seat = seatById.get(r.seat_id)!;
+      return {
+        memberId: r.member_id,
+        memberName: r.name,
+        unitId: seat.orgUnitId,
+        seatId: seat.id,
+        seatLabel: seat.label,
+        seatSort: seat.sort,
+        seatHasMinRank: seat.rule.minRankSort !== null,
+        groups: memberGroups(rules, creds.get(r.member_id) ?? [], r.end, seat.tz),
+        start: r.start,
+        end: r.end,
+      };
+    });
   const staffingUnits = units.map((u) => ({ id: u.id, name: u.name, typeKey: u.type_key }));
   return {
     rules,
-    evaluation: evaluateStaffing(rules, staffingUnits, onDuty),
-    transfers: suggestTransfers(rules, staffingUnits, onDuty),
+    window,
+    evaluation: evaluateStaffing(rules, staffingUnits, onDuty, window),
+    transfers: suggestTransfers(rules, staffingUnits, onDuty, window),
   };
 }
 

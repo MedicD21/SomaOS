@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { addDays, localDateOf, MANDATE_STATUS_LABEL, startOfLocalDay } from '@soma/schedule-engine';
+import { addDays, describeGaps, localDateOf, MANDATE_STATUS_LABEL, startOfLocalDay } from '@soma/schedule-engine';
 import { Forbidden } from '@/components/forbidden';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -103,8 +103,8 @@ export default async function MandatePage({ searchParams }: { searchParams: Prom
           <div className="space-y-2">
             {staffing.evaluation.department.map((d) => (
               <p key={d.group} className={`font-semibold ${d.met ? '' : 'text-danger'}`}>
-                <span data-testid={`dept-${d.group}`}>{`${d.count}/${d.min}`}</span> {d.label} on duty on {date}
-                {d.met ? ' — minimum met.' : ` — ${d.shortfall} below the minimum.`}
+                <span data-testid={`dept-${d.group}`}>{`${d.count}/${d.min}`}</span> {d.label} at the lowest point on {date}
+                {d.met ? ' — minimum met all day.' : ` — ${d.shortfall} below the minimum: ${describeGaps(d.gaps, staffing.window.tz)}.`}
               </p>
             ))}
             {holes > 0 ? (
