@@ -181,7 +181,7 @@ export default async function MandatePage({ searchParams }: { searchParams: Prom
             {history.length === 0 ? (
               <p className="text-sm">No changes yet.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Mandate history">
                 <table className="w-full min-w-[32rem] text-left text-sm">
                   <thead>
                     <tr>
