@@ -57,6 +57,18 @@ describe('scheduling templates', () => {
     expect(roles.chief_officer).toContain('scheduling.openshift.claim');
     expect(roles.external).not.toContain('scheduling.openshift.claim');
     expect(roles.company_officer).not.toContain('scheduling.config.manage');
+    for (const k of ['chief_officer', 'shift_commander', 'scheduler', 'dept_admin']) expect(roles[k]).toContain('scheduling.mandate.manage');
+    for (const k of ['member', 'company_officer', 'external']) expect(roles[k]).not.toContain('scheduling.mandate.manage');
+  });
+
+  it('career template drafts ALS staffing rules from its own credential types', () => {
+    const t = TEMPLATES['career-3-platoon'];
+    const keys = new Set(t.credentialTypes.map((c) => c.key));
+    const unitTypes = new Set(t.orgUnitTypes.map((u) => u.key));
+    expect(t.staffingRules).not.toBeNull();
+    for (const g of t.staffingRules!.groups) for (const k of g.credentialKeys) expect(keys.has(k)).toBe(true);
+    for (const r of t.staffingRules!.unitRules) expect(unitTypes.has(r.unitTypeKey)).toBe(true);
+    expect(TEMPLATES.volunteer.staffingRules).toBeNull();
   });
 
   it('inventory permissions land on the intended roles and the starter pack is complete', () => {

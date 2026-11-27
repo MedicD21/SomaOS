@@ -31,5 +31,6 @@ export const volunteer: DepartmentTemplate = {
   pay: VOLUNTEER_PAY,
   documents: STARTER_DOCUMENTS,
   training: STARTER_TRAINING,
+  staffingRules: null,
   schedulePattern: null,
 };

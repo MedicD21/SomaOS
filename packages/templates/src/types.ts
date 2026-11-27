@@ -1,5 +1,5 @@
 import type { Permission } from '@soma/auth';
-import type { ShiftPattern, Validity } from '@soma/schedule-engine';
+import type { ShiftPattern, StaffingRules, Validity } from '@soma/schedule-engine';
 import type { InventoryTemplate } from './inventory';
 import type { LeaveTemplate } from './leave';
 import type { PayTemplate } from './pay';
@@ -17,6 +17,8 @@ export type DepartmentTemplate = {
   credentialTypes: { key: string; label: string; validity: Validity; warnDays: number[] }[];
   /** Platoon keys in the payload are the template's shift keys. */
   schedulePattern: { key: string; payload: ShiftPattern } | null;
+  /** Seeded as a DRAFT `staffing.rules` version; nothing is checked until an administrator approves it. */
+  staffingRules: StaffingRules | null;
   inventory: InventoryTemplate;
   leave: LeaveTemplate;
   pay: PayTemplate;
